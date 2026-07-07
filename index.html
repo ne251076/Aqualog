@@ -171,7 +171,9 @@
   .stock-chip{
     background:var(--surface); border:1px solid var(--border); border-radius:999px;
     padding:6px 12px; font-size:13px; display:inline-flex; align-items:center; gap:4px; color:var(--text);
+    cursor:pointer;
   }
+  .stock-chip:active{ background:var(--surface-2); }
   .stock-chip b{ color:var(--accent); }
 
   /* Recommendations */
@@ -467,7 +469,7 @@ const FISH_DB = [
 ];
 
 let state = { tanks: [], entries: [], events: [], activeTankId: null };
-let ui = { tab:'overview', modal:null, editingEntryId:null, editingEventId:null, tankModalMode:null, selectedParam:'ph' };
+let ui = { tab:'overview', modal:null, editingEntryId:null, editingEventId:null, editingStockKey:null, tankModalMode:null, selectedParam:'ph' };
 let trendChart = null;
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -768,17 +770,28 @@ function getCurrentStock(){
   return Object.values(groups).filter(g => g.count > 0).sort((a,b) => b.count - a.count);
 }
 
+function getStockingTotalCost(){
+  return tankEvents()
+    .filter(e => e.kind === 'stocking' && e.stockingType === 'einsatz' && e.pricePerUnit != null)
+    .reduce((sum, e) => sum + (e.pricePerUnit * (e.count != null ? e.count : 1)), 0);
+}
+
+function formatEuro(value){
+  return value.toLocaleString('de-DE', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' €';
+}
+
 function renderStockSummary(){
   const stock = getCurrentStock();
+  const totalCost = getStockingTotalCost();
   if(stock.length === 0){
     return `<div class="empty-hint" style="margin-bottom:18px;">Noch kein Besatz eingetragen.</div>`;
   }
   const total = stock.reduce((sum,s) => sum + s.count, 0);
   return `
     <div class="stock-card">
-      <div class="stock-total">${total} Tier${total===1?'':'e'} · ${stock.length} Art${stock.length===1?'':'en'}</div>
+      <div class="stock-total">${total} Tier${total===1?'':'e'} · ${stock.length} Art${stock.length===1?'':'en'}${totalCost > 0 ? ` · ${formatEuro(totalCost)} investiert` : ''}</div>
       <div class="stock-list">
-        ${stock.map(s => `<span class="stock-chip">🐟 ${escapeHtml(s.species)} <b>×${s.count}</b></span>`).join('')}
+        ${stock.map((s,i) => `<span class="stock-chip" onclick="openEditStockModal(${i})">🐟 ${escapeHtml(s.species)} <b>×${s.count}</b></span>`).join('')}
       </div>
     </div>
   `;
@@ -807,7 +820,12 @@ function renderStatsBar(){
 function renderOverview(main){
   const entries = tankEntries();
   if(entries.length === 0){
-    main.innerHTML = `<div class="empty-state"><div class="big">💧</div>Noch keine Messwerte für dieses Aquarium.<br>Tippe unten auf <b>+</b>, um deinen ersten Eintrag zu machen.</div>`;
+    main.innerHTML = `
+      ${renderStatsBar()}
+      <div class="section-label">Besatz</div>
+      ${renderStockSummary()}
+      <div class="empty-state"><div class="big">💧</div>Noch keine Messwerte für dieses Aquarium.<br>Tippe unten auf <b>+</b>, um deinen ersten Eintrag zu machen.</div>
+    `;
     return;
   }
   const latest = entries[0];
@@ -1048,6 +1066,7 @@ function renderEvents(main){
             <div class="vals">
               ${e.species ? `<span class="tag"><b>${escapeHtml(e.species)}</b></span>` : ''}
               ${e.count != null ? `<span class="tag">Anzahl <b>${e.count}</b></span>` : ''}
+              ${e.pricePerUnit != null ? `<span class="tag">${formatEuro(e.pricePerUnit)}/Tier${e.count != null ? ` · ${formatEuro(e.pricePerUnit * e.count)} gesamt` : ''}</span>` : ''}
             </div>
             ${e.note ? `<div class="note">"${escapeHtml(e.note)}"</div>` : ''}
           </div>
@@ -1088,6 +1107,14 @@ function openStockingModal(eventId){
 }
 function openAssistantModal(){ ui.modal = 'assistant'; render(); }
 function openTargetsModal(){ ui.modal = 'targets'; render(); }
+function openEditStockModal(index){
+  const stock = getCurrentStock();
+  const group = stock[index];
+  if(!group) return;
+  ui.modal = 'editStock';
+  ui.editingStockKey = group.species.trim().toLowerCase();
+  render();
+}
 
 async function saveTargets(){
   const tank = activeTank();
@@ -1110,7 +1137,62 @@ async function resetTargets(){
   if(tank){ delete tank.customRanges; await saveState(); }
   closeModal();
 }
-function closeModal(){ ui.modal = null; ui.editingEntryId = null; ui.editingEventId = null; ui.tankModalMode = null; render(); }
+
+async function saveStockEdit(){
+  const oldKey = ui.editingStockKey;
+  const newName = document.getElementById('es-species').value.trim();
+  const newCount = Number(document.getElementById('es-count').value);
+  if(!newName){ alert('Bitte einen Namen eingeben.'); return; }
+  if(isNaN(newCount) || newCount < 0){ alert('Bitte eine gültige Anzahl (0 oder mehr) eingeben.'); return; }
+
+  const newKey = newName.toLowerCase();
+  if(newKey !== oldKey){
+    state.events.forEach(e => {
+      if(e.kind === 'stocking' && e.tankId === state.activeTankId && e.species && e.species.trim().toLowerCase() === oldKey){
+        e.species = newName;
+      }
+    });
+  }
+
+  const recomputed = getCurrentStock().find(g => g.species.trim().toLowerCase() === newKey);
+  const currentTotal = recomputed ? recomputed.count : 0;
+  const delta = newCount - currentTotal;
+  if(delta !== 0){
+    state.events.push({
+      id: uid(),
+      tankId: state.activeTankId,
+      kind: 'stocking',
+      date: new Date().toISOString().slice(0,10),
+      stockingType: delta > 0 ? 'einsatz' : 'verlust',
+      species: newName,
+      count: Math.abs(delta),
+      note: 'Manuelle Korrektur (Gruppe bearbeitet)'
+    });
+  }
+
+  await saveState();
+  closeModal();
+}
+
+async function removeStockGroup(){
+  const oldKey = ui.editingStockKey;
+  const group = getCurrentStock().find(g => g.species.trim().toLowerCase() === oldKey);
+  if(!group){ closeModal(); return; }
+  if(!confirm(`"${group.species}" komplett aus dem Besatz entfernen (Anzahl auf 0 setzen)?`)) return;
+  state.events.push({
+    id: uid(),
+    tankId: state.activeTankId,
+    kind: 'stocking',
+    date: new Date().toISOString().slice(0,10),
+    stockingType: 'verlust',
+    species: group.species,
+    count: group.count,
+    note: 'Gruppe entfernt'
+  });
+  await saveState();
+  closeModal();
+}
+function closeModal(){ ui.modal = null; ui.editingEntryId = null; ui.editingEventId = null; ui.editingStockKey = null; ui.tankModalMode = null; render(); }
 
 function openTankModal(){ ui.modal = 'tank'; render(); }
 
@@ -1258,6 +1340,10 @@ function renderModal(){
           <input type="number" step="1" id="f-count" value="${editing && editing.count != null ? editing.count : ''}" placeholder="–">
         </div>
         <div class="field">
+          <label>Preis pro Tier (€, optional)</label>
+          <input type="number" step="0.01" id="f-price" value="${editing && editing.pricePerUnit != null ? editing.pricePerUnit : ''}" placeholder="z.B. 2.50">
+        </div>
+        <div class="field">
           <label>Notiz (optional)</label>
           <textarea id="f-note" placeholder="z.B. Panzerwelse haben gelaicht">${editing && editing.note ? escapeHtml(editing.note) : ''}</textarea>
         </div>
@@ -1363,6 +1449,30 @@ function renderModal(){
         }).join('')}
         <button class="btn btn-primary" onclick="saveTargets()">Zielwerte speichern</button>
         <button class="btn btn-ghost" onclick="resetTargets()">Auf Standard zurücksetzen</button>
+      </div>
+    `;
+  } else if(ui.modal === 'editStock'){
+    const stock = getCurrentStock();
+    const group = stock.find(g => g.species.trim().toLowerCase() === ui.editingStockKey);
+    const currentName = group ? group.species : '';
+    const currentCount = group ? group.count : 0;
+    overlay.innerHTML = `
+      <div class="sheet">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="sheet-title">Besatzgruppe bearbeiten</div>
+        <div class="field">
+          <label>Fischart / Bezeichnung</label>
+          <input type="text" id="es-species" value="${escapeHtml(currentName)}">
+        </div>
+        <div class="field">
+          <label>Aktuelle Anzahl</label>
+          <input type="number" step="1" min="0" id="es-count" value="${currentCount}">
+        </div>
+        <button class="btn btn-primary" onclick="saveStockEdit()">Änderungen speichern</button>
+        <button class="btn btn-danger" onclick="removeStockGroup()">Gruppe entfernen (auf 0 setzen)</button>
+        <div class="empty-hint" style="margin-top:12px;">
+          Änderungen werden als neuer Eintrag im Besatz-Verlauf vermerkt (z.B. als Korrektur), damit die Historie nachvollziehbar bleibt.
+        </div>
       </div>
     `;
   }
@@ -1492,12 +1602,14 @@ async function saveStocking(){
   const date = document.getElementById('f-date').value;
   if(!date){ alert('Bitte ein Datum wählen.'); return; }
   const countRaw = document.getElementById('f-count').value;
+  const priceRaw = document.getElementById('f-price').value;
   const data = {
     kind: 'stocking',
     date,
     stockingType: document.getElementById('f-stocking-type').value,
     species: document.getElementById('f-species').value.trim(),
     count: countRaw === '' ? null : Number(countRaw),
+    pricePerUnit: priceRaw === '' ? null : Number(priceRaw),
     note: document.getElementById('f-note').value.trim()
   };
   if(ui.editingEventId){
@@ -1761,6 +1873,7 @@ function buildPrintReport(){
 
   const stock = getCurrentStock();
   const stockTotal = stock.reduce((sum,s) => sum + s.count, 0);
+  const stockCost = getStockingTotalCost();
 
   const el = ensureReportContainer();
   el.innerHTML = `
@@ -1774,7 +1887,7 @@ function buildPrintReport(){
     <div class="pr-section-title">Aktueller Besatz</div>
     ${stock.length === 0
       ? `<div class="empty-hint">Kein Besatz eingetragen.</div>`
-      : `<div class="pr-sub" style="margin:-6px 0 8px;">${stockTotal} Tier${stockTotal===1?'':'e'} · ${stock.length} Art${stock.length===1?'':'en'}</div>
+      : `<div class="pr-sub" style="margin:-6px 0 8px;">${stockTotal} Tier${stockTotal===1?'':'e'} · ${stock.length} Art${stock.length===1?'':'en'}${stockCost > 0 ? ` · ${formatEuro(stockCost)} investiert` : ''}</div>
          <div class="pr-stock-list">${stock.map(s => `<span class="pr-stock-chip">${escapeHtml(s.species)} × ${s.count}</span>`).join('')}</div>`}
     <div class="pr-section-title">Bewertung</div>
     ${recs.length === 0
@@ -1826,8 +1939,9 @@ function buildPrintReport(){
 
 function generateReport(){
   const entries = tankEntries();
-  if(entries.length === 0){
-    alert('Für dieses Aquarium liegen noch keine Messwerte vor.');
+  const stock = getCurrentStock();
+  if(entries.length === 0 && stock.length === 0){
+    alert('Für dieses Aquarium liegen noch keine Messwerte oder Besatzdaten vor.');
     return;
   }
   buildPrintReport();
