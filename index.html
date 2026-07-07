@@ -31,6 +31,7 @@
     --warn: #E8A33D;
     --danger: #E8604C;
     --accent: #4FB6C4;
+    --surface-translucent: rgba(22,38,42,0.92);
   }
   html.theme-light{
     --bg: #F3F8F8;
@@ -43,6 +44,7 @@
     --warn: #B56A10;
     --danger: #B7362A;
     --accent: #1C7F8C;
+    --surface-translucent: rgba(255,255,255,0.92);
   }
   *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html,body{ height:100%; }
@@ -246,7 +248,7 @@
   nav{
     position:fixed; bottom:0; left:50%; transform:translateX(-50%);
     width:100%; max-width:480px;
-    background: rgba(22,38,42,0.92);
+    background: var(--surface-translucent);
     backdrop-filter: blur(10px);
     border-top:1px solid var(--border);
     display:flex; align-items:center; justify-content:space-around;
