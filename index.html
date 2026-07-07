@@ -24,6 +24,18 @@
     --danger: #E8604C;
     --accent: #4FB6C4;
   }
+  html.theme-light{
+    --bg: #F3F8F8;
+    --surface: #FFFFFF;
+    --surface-2: #EAF1F1;
+    --border: #DAE5E5;
+    --text: #142023;
+    --text-muted: #5B6C6E;
+    --good: #2F8A37;
+    --warn: #B56A10;
+    --danger: #B7362A;
+    --accent: #1C7F8C;
+  }
   *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html,body{ height:100%; }
   body{
@@ -284,6 +296,12 @@
   .tank-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
   .tank-row input{ flex:1; }
   .tank-row button{ flex-shrink:0; }
+  .theme-toggle{ display:flex; gap:8px; margin-bottom:16px; }
+  .theme-btn{
+    flex:1; padding:10px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text-muted); font-size:13px; cursor:pointer;
+  }
+  .theme-btn.active{ background:var(--accent); color:#06181A; font-weight:600; border-color:var(--accent); }
   .loading{ text-align:center; padding:60px 0; color:var(--text-muted); }
 
   /* Lock screen */
@@ -332,6 +350,7 @@
 
   @media print{
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    html, body{ height:auto !important; background:#ffffff !important; }
     body *{ visibility:hidden; }
     #print-report, #print-report *{ visibility:visible; }
     #print-report{ position:absolute; left:0; top:0; width:100%; }
@@ -415,6 +434,20 @@ let ui = { tab:'overview', modal:null, editingEntryId:null, editingEventId:null,
 let trendChart = null;
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* ---------- Darstellung (Hell/Dunkel) ---------- */
+function getTheme(){
+  try{ return localStorage.getItem('aqualog-theme') || 'dark'; }catch(_){ return 'dark'; }
+}
+function applyTheme(theme){
+  document.documentElement.classList.toggle('theme-light', theme === 'light');
+}
+function chooseTheme(theme){
+  try{ localStorage.setItem('aqualog-theme', theme); }catch(_){}
+  applyTheme(theme);
+  render();
+}
+applyTheme(getTheme());
 
 const STORAGE_KEY = 'aqualog-data-v1';
 const FIREBASE_URL = 'https://aqualog-94d37-default-rtdb.europe-west1.firebasedatabase.app';
@@ -806,6 +839,12 @@ function drawTrendChart(param, withVal){
   if(!canvas || typeof Chart === 'undefined') return;
   if(trendChart){ trendChart.destroy(); trendChart = null; }
 
+  const light = getTheme() === 'light';
+  const lineColor = light ? '#1c7f8c' : '#4FB6C4';
+  const fillColor = light ? 'rgba(28,127,140,0.10)' : 'rgba(79,182,196,0.12)';
+  const tickColor = light ? '#5b6c6e' : '#8FA6A3';
+  const gridColor = light ? 'rgba(20,32,35,0.08)' : 'rgba(143,166,163,0.08)';
+
   const labels = withVal.map(e => formatDate(e.date));
   const values = withVal.map(e => Number(e[param.key]));
   const pointColors = values.map(v => STATUS_COLOR[getStatus(param, v) || 'good']);
@@ -837,8 +876,8 @@ function drawTrendChart(param, withVal){
         {
           label: param.label,
           data: values,
-          borderColor: '#4FB6C4',
-          backgroundColor: 'rgba(79,182,196,0.12)',
+          borderColor: lineColor,
+          backgroundColor: fillColor,
           pointBackgroundColor: pointColors,
           pointBorderColor: pointColors,
           pointRadius: 4,
@@ -863,12 +902,12 @@ function drawTrendChart(param, withVal){
       },
       scales: {
         x: {
-          ticks: { color: '#8FA6A3', font: { size: 10 } },
-          grid: { color: 'rgba(143,166,163,0.08)' }
+          ticks: { color: tickColor, font: { size: 10 } },
+          grid: { color: gridColor }
         },
         y: {
-          ticks: { color: '#8FA6A3', font: { size: 10 } },
-          grid: { color: 'rgba(143,166,163,0.08)' }
+          ticks: { color: tickColor, font: { size: 10 } },
+          grid: { color: gridColor }
         }
       }
     }
@@ -1044,6 +1083,12 @@ function renderModal(){
       <div class="sheet">
         <button class="close-x" onclick="closeModal()">✕</button>
         <div class="sheet-title">Aquarien verwalten</div>
+        <div class="section-label">Darstellung</div>
+        <div class="theme-toggle">
+          <button class="theme-btn ${getTheme()==='dark'?'active':''}" onclick="chooseTheme('dark')">🌙 Dunkel</button>
+          <button class="theme-btn ${getTheme()==='light'?'active':''}" onclick="chooseTheme('light')">☀️ Hell</button>
+        </div>
+        <div class="section-label">Deine Aquarien</div>
         ${state.tanks.map(t => `
           <div class="tank-row">
             <input type="text" value="${escapeHtml(t.name)}" onchange="renameTank('${t.id}', this.value)">
