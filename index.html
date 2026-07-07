@@ -125,6 +125,31 @@
   .spark{ align-self:flex-end; opacity:0.9; }
   .empty-hint{ font-size:11px; color:var(--text-muted); }
 
+  /* Recommendations */
+  .rec-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+  .rec-card{
+    display:flex; align-items:flex-start; gap:8px;
+    border-radius:12px; padding:10px 12px; font-size:13px;
+    border:1px solid var(--border);
+  }
+  .rec-card.rec-good{ background:rgba(111,191,115,0.1); color:var(--good); border-color:rgba(111,191,115,0.3); font-weight:600; margin-bottom:18px; }
+  .rec-card.rec-warn{ background:rgba(232,163,61,0.1); border-color:rgba(232,163,61,0.3); }
+  .rec-card.rec-danger{ background:rgba(232,96,76,0.1); border-color:rgba(232,96,76,0.3); }
+  .rec-text{ color:var(--text); line-height:1.4; }
+
+  /* Besatz-Assistent */
+  .fish-row{
+    background: var(--surface-2); border:1px solid var(--border); border-radius:12px;
+    padding:10px 12px; margin-bottom:8px;
+  }
+  .fish-row-top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .fish-name{ font-weight:600; font-size:14px; }
+  .fish-meta{ font-size:11px; color:var(--text-muted); }
+  .fish-issue{ font-size:12px; margin-top:5px; line-height:1.4; }
+  .fish-issue.warn{ color: var(--warn); }
+  .fish-issue.danger{ color: var(--danger); }
+  .fish-issue.good{ color: var(--good); }
+
   /* Trends */
   .param-chips{ display:flex; flex-wrap:wrap; gap:8px; padding-bottom:14px; }
   .param-chip{
@@ -273,6 +298,54 @@ const PARAMS = [
   {key:'co2',  label:'CO₂',                  unit:'mg/l', min:0,   max:50,  good:[15,30],   warn:[10,40],    decimals:0, step:1},
 ];
 const STATUS_COLOR = { good:'#6FBF73', warn:'#E8A33D', danger:'#E8604C', none:'#3a4a4d' };
+
+// Warn/Gefahr-Empfehlungstexte je Parameter und Richtung (zu niedrig/zu hoch).
+// Allgemeine Richtwerte für ein Süßwasser-Gesellschaftsbecken - kein Ersatz für
+// artspezifische Recherche bei empfindlichen oder anspruchsvollen Tieren.
+const RECOMMENDATIONS = {
+  ph:   { low:{warn:'pH etwas niedrig – im Auge behalten.', danger:'pH stark sauer – langsam gegensteuern, kein Schock für die Fische!'},
+          high:{warn:'pH etwas hoch – im Auge behalten.', danger:'pH stark basisch – langsam senken, kein Schock für die Fische!'} },
+  temp: { low:{warn:'Temperatur etwas niedrig.', danger:'Temperatur zu niedrig – Heizung prüfen.'},
+          high:{warn:'Temperatur etwas hoch.', danger:'Temperatur zu hoch – Sauerstoffmangel möglich, ggf. kühlen.'} },
+  nh4:  { high:{warn:'Ammonium leicht erhöht – Wasserwechsel empfohlen.', danger:'Ammonium giftig – sofort Wasserwechsel, vorerst nicht füttern!'} },
+  no2:  { high:{warn:'Nitrit leicht erhöht – Wasserwechsel empfohlen.', danger:'Nitrit giftig – keine Fische einsetzen! Sofort Wasserwechsel.'} },
+  no3:  { high:{warn:'Nitrat erhöht – Wasserwechsel empfohlen.', danger:'Nitrat stark erhöht – zeitnah Wasserwechsel machen.'} },
+  kh:   { low:{warn:'KH niedrig – pH-Absturz möglich.', danger:'KH sehr niedrig – akute Gefahr eines pH-Sturzes, KH anheben.'},
+          high:{warn:'KH hoch.', danger:'KH sehr hoch.'} },
+  gh:   { low:{warn:'GH niedrig – ggf. nicht für alle Fische geeignet.', danger:'GH sehr niedrig.'},
+          high:{warn:'GH hoch.', danger:'GH sehr hoch.'} },
+  o2:   { low:{warn:'Sauerstoff niedrig – Belüftung/Oberflächenbewegung prüfen.', danger:'Sauerstoff kritisch niedrig – sofort Belüftung erhöhen!'} },
+  po4:  { high:{warn:'Phosphat erhöht – Algenrisiko.', danger:'Phosphat stark erhöht – hohes Algenrisiko, Wasserwechsel empfohlen.'} },
+  fe:   { low:{warn:'Eisen niedrig – Pflanzen ggf. unterversorgt.', danger:'Eisen sehr niedrig.'},
+          high:{warn:'Eisen hoch.', danger:'Eisen sehr hoch – Düngung reduzieren.'} },
+  sio2: { high:{warn:'Silikat erhöht – Risiko für Kieselalgen.', danger:'Silikat stark erhöht.'} },
+  cu:   { high:{warn:'Kupfer nachweisbar – gefährlich für Wirbellose.', danger:'Kupfer stark erhöht – akute Gefahr für Garnelen/Schnecken!'} },
+  co2:  { low:{warn:'CO₂ niedrig – Pflanzenwachstum eingeschränkt.', danger:'CO₂ sehr niedrig.'},
+          high:{warn:'CO₂ hoch – nachts Sauerstoffmangel möglich.', danger:'CO₂ zu hoch – Fische akut gefährdet, sofort belüften!'} },
+};
+
+// Kleine, nicht erschöpfende Auswahl gängiger Süßwasser-Arten mit groben
+// Richtwerten aus verschiedenen Aquaristik-Ratgebern. Dient als grobe
+// Orientierung für den Besatz-Assistenten - bei anspruchsvollen oder
+// seltenen Arten immer zusätzlich artspezifisch recherchieren.
+const FISH_DB = [
+  { name:'Neonsalmler', aliases:['neon tetra','paracheirodon innesi'], minLiters:60, minGroup:10, ph:[6.0,7.0], temp:[20,26], maxSize:4, temperament:'friedlich', notes:'Schwarmfisch, mind. 10 Tiere. Nicht mit Kardinalsalmlern mischen.' },
+  { name:'Kardinalsalmler', aliases:['roter neon','paracheirodon axelrodi'], minLiters:100, minGroup:10, ph:[5.0,7.0], temp:[25,29], maxSize:5, temperament:'friedlich', notes:'Braucht wärmeres Wasser als der Neonsalmler.' },
+  { name:'Guppy', aliases:['poecilia reticulata'], minLiters:54, minGroup:3, ph:[7.0,8.5], temp:[22,28], maxSize:6, temperament:'friedlich', notes:'Lebendgebärend, vermehrt sich sehr schnell.' },
+  { name:'Black Molly', aliases:['molly','poecilia sphenops'], minLiters:100, minGroup:3, ph:[7.0,8.5], temp:[24,28], maxSize:10, temperament:'friedlich', notes:'Mag leicht hartes Wasser.' },
+  { name:'Skalar', aliases:['segelflosser','pterophyllum scalare'], minLiters:250, minLengthCm:100, minGroup:6, ph:[5.5,7.5], temp:[24,30], maxSize:15, temperament:'halb-aggressiv', notes:'Braucht ein Becken mit mind. 50–60 cm Höhe; bildet zur Paarungszeit Reviere.' },
+  { name:'Panzerwels', aliases:['corydoras'], minLiters:100, minGroup:6, ph:[6.0,7.5], temp:[22,26], maxSize:7, temperament:'friedlich', notes:'Bodenbewohner, braucht weichen Bodengrund.' },
+  { name:'Antennenwels', aliases:['ancistrus'], minLiters:100, minGroup:1, ph:[6.5,7.5], temp:[24,28], maxSize:15, temperament:'friedlich', notes:'Braucht Wurzelholz zum Abraspeln.' },
+  { name:'Zwergfadenfisch', aliases:['trichogaster lalius'], minLiters:60, minGroup:1, ph:[6.0,7.5], temp:[24,28], maxSize:8, temperament:'halb-aggressiv', notes:'Männchen sind untereinander territorial, nicht 2 Männchen halten.' },
+  { name:'Kardinalfisch', aliases:['tanichthys albonubes'], minLiters:54, minGroup:8, ph:[6.0,8.0], temp:[18,24], maxSize:4, temperament:'friedlich', notes:'Verträgt kühleres Wasser, gute Alternative bei hartem Leitungswasser.' },
+  { name:'Zebrabärbling', aliases:['danio rerio'], minLiters:54, minGroup:8, ph:[6.5,7.5], temp:[18,24], maxSize:5, temperament:'friedlich', notes:'Sehr robust und aktiv, braucht Schwimmraum in der Länge.' },
+  { name:'Sumatrabarbe', aliases:['puntigrus tetrazona'], minLiters:100, minGroup:8, ph:[6.0,7.0], temp:[22,26], maxSize:7, temperament:'halb-aggressiv', notes:'In zu kleiner Gruppe werden andere Fische an den Flossen gezwickt.' },
+  { name:'Kongosalmler', aliases:['phenacogrammus interruptus'], minLiters:150, minGroup:8, ph:[6.0,7.5], temp:[24,27], maxSize:8, temperament:'friedlich', notes:'Braucht viel Schwimmraum in der Länge.' },
+  { name:'Kaisersalmler', aliases:['nematobrycon palmeri'], minLiters:100, minGroup:6, ph:[6.0,7.5], temp:[23,27], maxSize:5.5, temperament:'friedlich', notes:'Männchen zeigen leichtes Imponierverhalten untereinander.' },
+  { name:'Schmetterlingsbuntbarsch', aliases:['apistogramma cacatuoides'], minLiters:60, minGroup:1, ph:[5.5,7.0], temp:[24,28], maxSize:8, temperament:'halb-aggressiv', notes:'Am besten paarweise halten, Männchen sind territorial.' },
+  { name:'Diskus', aliases:['symphysodon'], minLiters:300, minLengthCm:100, minGroup:6, ph:[5.5,7.0], temp:[28,30], maxSize:20, temperament:'friedlich', notes:'Anspruchsvoll, braucht sehr stabile Wasserwerte und warmes Wasser.' },
+  { name:'Zwerggarnele', aliases:['neocaridina', 'red fire', 'garnele'], minLiters:20, minGroup:10, ph:[6.5,8.0], temp:[20,26], maxSize:3, temperament:'friedlich', notes:'Kein Kupfer im Wasser! Größere Fische können eine Gefahr sein.' },
+];
 
 let state = { tanks: [], entries: [], events: [], activeTankId: null };
 let ui = { tab:'overview', modal:null, editingEntryId:null, editingEventId:null, tankModalMode:null, selectedParam:'ph' };
@@ -482,6 +555,41 @@ function renderMain(){
   else { renderHistory(main); }
 }
 
+function getRecommendations(){
+  const recs = [];
+  PARAMS.forEach(p => {
+    const entryWithVal = lastValueFor(p.key);
+    if(!entryWithVal) return;
+    const value = entryWithVal[p.key];
+    const status = getStatus(p, value);
+    if(status === 'warn' || status === 'danger'){
+      const direction = Number(value) < p.good[0] ? 'low' : 'high';
+      const dict = RECOMMENDATIONS[p.key] && RECOMMENDATIONS[p.key][direction];
+      const message = (dict && dict[status]) || `${p.label} liegt außerhalb des Idealbereichs.`;
+      recs.push({ key:p.key, param:p, status, message, value });
+    }
+  });
+  recs.sort((a,b) => (a.status === 'danger' ? 0 : 1) - (b.status === 'danger' ? 0 : 1));
+  return recs;
+}
+
+function renderRecommendations(){
+  const recs = getRecommendations();
+  if(recs.length === 0){
+    return `<div class="rec-card rec-good">✅ Alle gemessenen Werte sind im grünen Bereich.</div>`;
+  }
+  return `
+    <div class="rec-list">
+      ${recs.map(r => `
+        <div class="rec-card rec-${r.status}">
+          <span class="rec-icon">${r.status === 'danger' ? '🔴' : '🟡'}</span>
+          <div class="rec-text"><b>${escapeHtml(r.param.label)}</b> (${fmt(r.param, r.value)}${r.param.unit}): ${escapeHtml(r.message)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderOverview(main){
   const entries = tankEntries();
   if(entries.length === 0){
@@ -512,6 +620,8 @@ function renderOverview(main){
     `;
   }).join('');
   main.innerHTML = `
+    <div class="section-label">Bewertung</div>
+    ${renderRecommendations()}
     <div class="section-label">Letzter Eintrag: ${formatDate(latest.date)}</div>
     <div class="grid">${cards}</div>
   `;
@@ -752,6 +862,7 @@ function openStockingModal(eventId){
   ui.editingEventId = eventId || null;
   render();
 }
+function openAssistantModal(){ ui.modal = 'assistant'; render(); }
 function closeModal(){ ui.modal = null; ui.editingEntryId = null; ui.editingEventId = null; ui.tankModalMode = null; render(); }
 
 function openTankModal(){ ui.modal = 'tank'; render(); }
@@ -770,6 +881,7 @@ function renderModal(){
         <button class="btn btn-ghost" onclick="openEntryModal()">💧 Wasserwerte</button>
         <button class="btn btn-ghost" onclick="openMaintenanceModal()">🛠 Wartung</button>
         <button class="btn btn-ghost" onclick="openStockingModal()">🐟 Besatz</button>
+        <button class="btn btn-ghost" onclick="openAssistantModal()">🔍 Besatz-Assistent</button>
       </div>
     `;
   } else if(ui.modal === 'entry'){
@@ -894,6 +1006,78 @@ function renderModal(){
         ${editing ? `<button class="btn btn-danger" onclick="deleteEvent('${editing.id}')">Eintrag löschen</button>` : ''}
       </div>
     `;
+  } else if(ui.modal === 'assistant'){
+    const tank = activeTank();
+    const phEntry = lastValueFor('ph');
+    const tempEntry = lastValueFor('temp');
+    const currentPh = phEntry ? Number(phEntry.ph) : null;
+    const currentTemp = tempEntry ? Number(tempEntry.temp) : null;
+
+    const assessed = FISH_DB.map(f => ({ fish:f, ...assessFish(f, tank, currentPh, currentTemp) }))
+      .sort((a,b) => (a.status==='good'?0:a.status==='warn'?1:2) - (b.status==='good'?0:b.status==='warn'?1:2));
+
+    const stocked = getStockedGroups().map(g => {
+      const match = matchFish(g.species);
+      const issues = [];
+      if(match){
+        if(g.count < match.minGroup){ issues.push(`Nur ${g.count} eingetragen – empfohlen sind mind. ${match.minGroup}.`); }
+        const sizeAssessment = assessFish(match, tank, currentPh, currentTemp);
+        issues.push(...sizeAssessment.issues);
+      }
+      return { ...g, match, issues };
+    });
+
+    overlay.innerHTML = `
+      <div class="sheet">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="sheet-title">Besatz-Assistent</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Beckenvolumen (Liter)</label>
+            <input type="number" step="1" id="f-tank-liters" value="${tank && tank.volumeLiters != null ? tank.volumeLiters : ''}" placeholder="z.B. 120">
+          </div>
+          <div class="field">
+            <label>Kantenlänge (cm)</label>
+            <input type="number" step="1" id="f-tank-length" value="${tank && tank.lengthCm != null ? tank.lengthCm : ''}" placeholder="z.B. 80">
+          </div>
+        </div>
+        <button class="btn btn-ghost" style="margin-top:0;margin-bottom:16px;" onclick="saveTankSize()">Beckengröße speichern</button>
+        <div class="empty-hint" style="margin-bottom:14px;">
+          Aktuelle Werte: ${currentPh !== null ? `pH ${currentPh}` : 'pH unbekannt'} · ${currentTemp !== null ? `${currentTemp}°C` : 'Temperatur unbekannt'}
+        </div>
+
+        ${stocked.length > 0 ? `
+          <div class="section-label">Dein aktueller Besatz</div>
+          ${stocked.map(s => `
+            <div class="fish-row">
+              <div class="fish-row-top">
+                <span class="fish-name">${escapeHtml(s.species)} ${s.match ? '' : '<span class="empty-hint">(nicht in Datenbank)</span>'}</span>
+                <span class="fish-meta">${s.count} Tier${s.count===1?'':'e'}</span>
+              </div>
+              ${s.issues.map(i => `<div class="fish-issue warn">⚠️ ${escapeHtml(i)}</div>`).join('')}
+              ${s.match && s.issues.length===0 ? `<div class="fish-issue good">✓ Sieht laut Datenbank passend aus.</div>` : ''}
+            </div>
+          `).join('')}
+        ` : ''}
+
+        <div class="section-label" style="margin-top:18px;">Passende Arten für dein Becken</div>
+        ${assessed.map(a => `
+          <div class="fish-row">
+            <div class="fish-row-top">
+              <span class="fish-name">${escapeHtml(a.fish.name)}</span>
+              <span class="fish-meta">ab ${a.fish.minLiters} L${a.fish.minLengthCm ? `, ${a.fish.minLengthCm}+ cm` : ''} · Gruppe ${a.fish.minGroup}+</span>
+            </div>
+            ${a.status === 'good'
+              ? `<div class="fish-issue good">✓ Passt zu Beckengröße &amp; Wasserwerten</div>`
+              : a.issues.map(i => `<div class="fish-issue ${a.status}">${a.status==='danger'?'🔴':'🟡'} ${escapeHtml(i)}</div>`).join('')}
+            <div class="fish-meta" style="margin-top:4px;">${escapeHtml(a.fish.notes)}</div>
+          </div>
+        `).join('')}
+        <div class="empty-hint" style="margin-top:14px;">
+          Nur eine grobe Orientierung anhand gängiger Richtwerte – bei anspruchsvollen Arten immer zusätzlich recherchieren, insbesondere zu Vergesellschaftung und Verträglichkeit untereinander.
+        </div>
+      </div>
+    `;
   }
   document.getElementById('app').appendChild(overlay);
 }
@@ -941,6 +1125,54 @@ async function deleteEntry(id){
   state.entries = state.entries.filter(e => e.id !== id);
   await saveState();
   closeModal();
+}
+
+function matchFish(speciesText){
+  if(!speciesText) return null;
+  const t = speciesText.toLowerCase();
+  return FISH_DB.find(f => t.includes(f.name.toLowerCase()) || (f.aliases||[]).some(a => t.includes(a.toLowerCase())));
+}
+
+function getStockedGroups(){
+  const events = tankEvents().filter(e => e.kind === 'stocking' && e.stockingType === 'einsatz' && e.species);
+  const groups = {};
+  events.forEach(e => {
+    const key = e.species.trim().toLowerCase();
+    if(!groups[key]) groups[key] = { species: e.species.trim(), count: 0 };
+    groups[key].count += (e.count != null ? e.count : 1);
+  });
+  return Object.values(groups);
+}
+
+function assessFish(f, tank, currentPh, currentTemp){
+  const issues = [];
+  if(tank && tank.volumeLiters && f.minLiters && tank.volumeLiters < f.minLiters){
+    issues.push(`Becken zu klein (mind. ${f.minLiters} L nötig)`);
+  }
+  if(f.minLengthCm && tank && tank.lengthCm && tank.lengthCm < f.minLengthCm){
+    issues.push(`Kantenlänge zu kurz (mind. ${f.minLengthCm} cm nötig)`);
+  }
+  if(currentPh !== null && currentPh !== undefined && (currentPh < f.ph[0] || currentPh > f.ph[1])){
+    issues.push(`pH weicht ab (ideal ${f.ph[0]}–${f.ph[1]})`);
+  }
+  if(currentTemp !== null && currentTemp !== undefined && (currentTemp < f.temp[0] || currentTemp > f.temp[1])){
+    issues.push(`Temperatur weicht ab (ideal ${f.temp[0]}–${f.temp[1]}°C)`);
+  }
+  const sizeIssue = issues.some(i => i.includes('Becken') || i.includes('Kantenlänge'));
+  const status = issues.length === 0 ? 'good' : (sizeIssue ? 'danger' : 'warn');
+  return { issues, status };
+}
+
+async function saveTankSize(){
+  const tank = activeTank();
+  if(!tank) return;
+  const litersRaw = document.getElementById('f-tank-liters').value;
+  const lengthRaw = document.getElementById('f-tank-length').value;
+  tank.volumeLiters = litersRaw === '' ? null : Number(litersRaw);
+  tank.lengthCm = lengthRaw === '' ? null : Number(lengthRaw);
+  await saveState();
+  render();
+  openAssistantModal();
 }
 
 async function saveMaintenance(){
