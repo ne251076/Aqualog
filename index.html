@@ -479,8 +479,10 @@ const FIREBASE_URL = 'https://aqualog-94d37-default-rtdb.europe-west1.firebaseda
 const FIREBASE_PATH = 'aqualog/f7e3a9c2-51b8-4d6a-9c2e-8a1b6d4f0e77';
 
 async function storageGet(){
+  const token = await ensureFreshToken();
+  if(!token) return localStorage.getItem(STORAGE_KEY);
   try{
-    const res = await fetch(`${FIREBASE_URL}/${FIREBASE_PATH}.json`);
+    const res = await fetch(`${FIREBASE_URL}/${FIREBASE_PATH}.json?auth=${token}`);
     if(!res.ok) throw new Error('Firebase-Antwort nicht ok');
     const data = await res.json();
     const json = data ? JSON.stringify(data) : null;
@@ -493,8 +495,13 @@ async function storageGet(){
 }
 
 async function storageSet(value){
+  const token = await ensureFreshToken();
+  if(!token){
+    try{ localStorage.setItem(STORAGE_KEY, value); }catch(_){}
+    return false;
+  }
   try{
-    const res = await fetch(`${FIREBASE_URL}/${FIREBASE_PATH}.json`, {
+    const res = await fetch(`${FIREBASE_URL}/${FIREBASE_PATH}.json?auth=${token}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: value
@@ -1109,6 +1116,7 @@ function renderModal(){
         <button class="close-x" onclick="closeModal()">✕</button>
         <div class="sheet-title">Aquarien verwalten</div>
         <div class="section-label">Darstellung</div>
+        <div class="empty-hint" style="margin-bottom:10px;">Angemeldet als ${escapeHtml((getAuthState()||{}).email || '')}</div>
         <div class="theme-toggle">
           <button class="theme-btn ${getTheme()==='dark'?'active':''}" onclick="chooseTheme('dark')">🌙 Dunkel</button>
           <button class="theme-btn ${getTheme()==='light'?'active':''}" onclick="chooseTheme('light')">☀️ Hell</button>
@@ -1131,7 +1139,7 @@ function renderModal(){
         <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importData(this.files[0])">
         <div class="section-label" style="margin-top:20px;">Personalisierung</div>
         <button class="btn btn-ghost" onclick="openTargetsModal()">🎯 Zielwerte für dieses Aquarium anpassen</button>
-        <button class="btn btn-ghost" onclick="lockNow()">🔒 App jetzt sperren</button>
+        <button class="btn btn-ghost" onclick="logout()">🚪 Abmelden</button>
       </div>
     `;
   } else if(ui.modal === 'maintenance'){
@@ -1526,85 +1534,141 @@ async function importData(file){
   }
 }
 
-/* ---------- PIN-Sperre (geräteweise, schützt die App-Oberfläche) ---------- */
-const PIN_STORAGE_KEY = 'aqualog-pin-hash';
-let pinMode = null;
+/* ---------- Firebase-Anmeldung (echter Zugriffsschutz auf die Datenbank) ---------- */
+const FIREBASE_API_KEY = 'AIzaSyBIAZas5PWKUuPLLWMQaU8AGBgTSvJKVzE';
+const AUTH_STORAGE_KEY = 'aqualog-auth';
 
-async function sha256(text){
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+function getAuthState(){
+  try{
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(_){ return null; }
+}
+function setAuthState(obj){
+  try{ localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(obj)); }catch(_){}
+}
+function clearAuthState(){
+  try{ localStorage.removeItem(AUTH_STORAGE_KEY); }catch(_){}
 }
 
-function initLock(){
-  let storedHash = null;
-  try{ storedHash = localStorage.getItem(PIN_STORAGE_KEY); }catch(_){}
-  pinMode = storedHash ? 'enter' : 'set';
-  renderLock();
+async function firebaseSignIn(email, password){
+  try{
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      const code = data.error && data.error.message;
+      const friendly = {
+        'EMAIL_NOT_FOUND': 'Kein Konto mit dieser E-Mail gefunden.',
+        'INVALID_PASSWORD': 'Falsches Passwort.',
+        'INVALID_LOGIN_CREDENTIALS': 'E-Mail oder Passwort falsch.',
+        'USER_DISABLED': 'Dieses Konto wurde deaktiviert.',
+        'TOO_MANY_ATTEMPTS_TRY_LATER': 'Zu viele Versuche – bitte später erneut versuchen.'
+      };
+      return { error: friendly[code] || 'Anmeldung fehlgeschlagen.' };
+    }
+    setAuthState({
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      expiresAt: Date.now() + Number(data.expiresIn) * 1000,
+      email: data.email
+    });
+    return { ok: true };
+  }catch(e){
+    return { error: 'Keine Verbindung möglich. Bitte Internetverbindung prüfen.' };
+  }
 }
 
-function renderLock(){
+async function firebaseRefreshToken(refreshToken){
+  try{
+    const res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`
+    });
+    const data = await res.json();
+    if(!res.ok) return null;
+    return {
+      idToken: data.id_token,
+      refreshToken: data.refresh_token,
+      expiresAt: Date.now() + Number(data.expires_in) * 1000
+    };
+  }catch(e){ return null; }
+}
+
+async function ensureFreshToken(){
+  const auth = getAuthState();
+  if(!auth) return null;
+  if(Date.now() < auth.expiresAt - 60000){
+    return auth.idToken;
+  }
+  const refreshed = await firebaseRefreshToken(auth.refreshToken);
+  if(!refreshed){
+    clearAuthState();
+    return null;
+  }
+  setAuthState({ ...auth, ...refreshed });
+  return refreshed.idToken;
+}
+
+async function initAuth(){
+  const token = await ensureFreshToken();
+  if(token){
+    loadState();
+  } else {
+    renderLogin();
+  }
+}
+
+function renderLogin(errorMsg){
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="lock-screen">
       <div class="lock-icon">🔒</div>
-      <div class="lock-title">${pinMode === 'set' ? 'Code festlegen' : 'AquaLog entsperren'}</div>
-      <div class="lock-sub">${pinMode === 'set'
-        ? 'Lege einen 4–6-stelligen Code für dieses Gerät fest. Er schützt nur die Ansicht hier im Browser, nicht die Cloud-Datenbank selbst.'
-        : 'Gib deinen Code für dieses Gerät ein.'}</div>
-      <input type="password" inputmode="numeric" pattern="[0-9]*" id="lock-input" class="lock-input" maxlength="6" placeholder="••••" onkeydown="if(event.key==='Enter') submitLock()">
-      ${pinMode === 'set' ? `<input type="password" inputmode="numeric" pattern="[0-9]*" id="lock-input-confirm" class="lock-input" maxlength="6" placeholder="Code bestätigen" onkeydown="if(event.key==='Enter') submitLock()">` : ''}
-      <div class="lock-error" id="lock-error"></div>
+      <div class="lock-title">Bei AquaLog anmelden</div>
+      <div class="lock-sub">Melde dich mit deinem AquaLog-Konto an. Nur damit lassen sich deine Wasserwerte lesen oder ändern.</div>
+      <div class="field" style="width:100%; max-width:280px;">
+        <label>E-Mail</label>
+        <input type="email" id="auth-email" autocomplete="username">
+      </div>
+      <div class="field" style="width:100%; max-width:280px;">
+        <label>Passwort</label>
+        <input type="password" id="auth-password" autocomplete="current-password" onkeydown="if(event.key==='Enter') submitLogin()">
+      </div>
+      <div class="lock-error" id="lock-error">${errorMsg || ''}</div>
       <div class="lock-actions">
-        <button class="btn btn-primary" onclick="submitLock()">${pinMode === 'set' ? 'Code speichern' : 'Entsperren'}</button>
-        ${pinMode === 'enter' ? `<button class="btn btn-ghost" onclick="forgotPin()">Code vergessen? (auf diesem Gerät zurücksetzen)</button>` : ''}
+        <button class="btn btn-primary" onclick="submitLogin()">Anmelden</button>
       </div>
     </div>
   `;
-  document.getElementById('lock-input').focus();
+  document.getElementById('auth-email').focus();
 }
 
-async function submitLock(){
-  const val = document.getElementById('lock-input').value.trim();
+async function submitLogin(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
   const errorEl = document.getElementById('lock-error');
-  if(!/^[0-9]{4,6}$/.test(val)){
-    errorEl.textContent = 'Bitte 4–6 Ziffern eingeben.';
+  if(!email || !password){
+    errorEl.textContent = 'Bitte E-Mail und Passwort eingeben.';
     return;
   }
-  if(pinMode === 'set'){
-    const confirmVal = document.getElementById('lock-input-confirm').value.trim();
-    if(val !== confirmVal){
-      errorEl.textContent = 'Codes stimmen nicht überein.';
-      return;
-    }
-    const hash = await sha256(val);
-    try{ localStorage.setItem(PIN_STORAGE_KEY, hash); }catch(_){}
-    loadState();
+  errorEl.textContent = 'Anmeldung läuft …';
+  const result = await firebaseSignIn(email, password);
+  if(result.error){
+    errorEl.textContent = result.error;
   } else {
-    const hash = await sha256(val);
-    let stored = null;
-    try{ stored = localStorage.getItem(PIN_STORAGE_KEY); }catch(_){}
-    if(hash === stored){
-      loadState();
-    } else {
-      errorEl.textContent = 'Falscher Code.';
-      document.getElementById('lock-input').value = '';
-    }
-  }
-}
-
-function forgotPin(){
-  if(confirm('Code auf diesem Gerät zurücksetzen? Deine Daten in der Cloud bleiben erhalten, du legst danach nur einen neuen Code fest.')){
-    try{ localStorage.removeItem(PIN_STORAGE_KEY); }catch(_){}
-    pinMode = 'set';
-    renderLock();
+    loadState();
   }
 }
 
 /* ---------- PDF-Bericht ---------- */
-function lockNow(){
+function logout(){
+  clearAuthState();
   ui.modal = null;
-  initLock();
+  initAuth();
 }
 
 let reportCharts = [];
@@ -1720,7 +1784,8 @@ function generateReport(){
 }
 
 /* ---------- Start ---------- */
-initLock();
+/* ---------- Start ---------- */
+initAuth();
 </script>
 </body>
 </html>
