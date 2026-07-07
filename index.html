@@ -607,10 +607,6 @@ function render(){
           <b>${tank ? escapeHtml(tank.name) : 'Kein Aquarium'}</b> ▾
         </button>
       </div>
-      <div style="display:flex; gap:8px;">
-        <button class="icon-btn" onclick="generateReport()" title="PDF-Bericht">📄</button>
-        <button class="icon-btn" onclick="openTankModal()">⚙</button>
-      </div>
     </header>
     <main id="main"></main>
     <button class="fab" onclick="openAddModal()">+</button>
@@ -1019,6 +1015,8 @@ function renderModal(){
         <button class="btn btn-ghost" onclick="openMaintenanceModal()">🛠 Wartung</button>
         <button class="btn btn-ghost" onclick="openStockingModal()">🐟 Besatz</button>
         <button class="btn btn-ghost" onclick="openAssistantModal()">🔍 Besatz-Assistent</button>
+        <button class="btn btn-ghost" onclick="closeModal(); generateReport();">📄 PDF-Bericht</button>
+        <button class="btn btn-ghost" onclick="openTankModal()">⚙ Einstellungen</button>
       </div>
     `;
   } else if(ui.modal === 'entry'){
