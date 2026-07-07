@@ -164,6 +164,16 @@
   .stat-label{ font-size:10px; text-transform:uppercase; letter-spacing:0.7px; color:var(--text-muted); }
   .stat-value{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px; }
 
+  /* Besatz-Übersicht */
+  .stock-card{ margin-bottom:18px; }
+  .stock-total{ font-size:12px; color:var(--text-muted); margin-bottom:8px; }
+  .stock-list{ display:flex; flex-wrap:wrap; gap:8px; }
+  .stock-chip{
+    background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:6px 12px; font-size:13px; display:inline-flex; align-items:center; gap:4px; color:var(--text);
+  }
+  .stock-chip b{ color:var(--accent); }
+
   /* Recommendations */
   .rec-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
   .rec-card{
@@ -365,6 +375,8 @@
   .pr-rec.warn{ background:#FEF3E2; color:#8a5a10; }
   .pr-rec.danger{ background:#FDEAE7; color:#a3291b; }
   .pr-rec.good{ background:#EAF7EB; color:#2f7a34; font-weight:600; }
+  .pr-stock-list{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+  .pr-stock-chip{ background:#EAF1F1; border:1px solid #dbe6e6; border-radius:999px; padding:5px 12px; font-size:12px; color:#142023; }
   .pr-chart-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:10px; }
   .pr-chart-card{ border:1px solid #e5e5e5; border-radius:10px; padding:10px 12px 6px; break-inside:avoid; }
   .pr-chart-title{ font-size:12px; font-weight:600; color:#333; margin-bottom:6px; }
@@ -743,6 +755,35 @@ function renderRecommendations(){
   `;
 }
 
+function getCurrentStock(){
+  const events = tankEvents().filter(e => e.kind === 'stocking' && e.species);
+  const groups = {};
+  events.forEach(e => {
+    const key = e.species.trim().toLowerCase();
+    if(!groups[key]) groups[key] = { species: e.species.trim(), count: 0 };
+    const amount = e.count != null ? e.count : 1;
+    if(e.stockingType === 'einsatz') groups[key].count += amount;
+    else if(e.stockingType === 'verlust') groups[key].count -= amount;
+  });
+  return Object.values(groups).filter(g => g.count > 0).sort((a,b) => b.count - a.count);
+}
+
+function renderStockSummary(){
+  const stock = getCurrentStock();
+  if(stock.length === 0){
+    return `<div class="empty-hint" style="margin-bottom:18px;">Noch kein Besatz eingetragen.</div>`;
+  }
+  const total = stock.reduce((sum,s) => sum + s.count, 0);
+  return `
+    <div class="stock-card">
+      <div class="stock-total">${total} Tier${total===1?'':'e'} · ${stock.length} Art${stock.length===1?'':'en'}</div>
+      <div class="stock-list">
+        ${stock.map(s => `<span class="stock-chip">🐟 ${escapeHtml(s.species)} <b>×${s.count}</b></span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function renderStatsBar(){
   const entries = tankEntries();
   const lastTest = entries[0];
@@ -795,6 +836,8 @@ function renderOverview(main){
   }).join('');
   main.innerHTML = `
     ${renderStatsBar()}
+    <div class="section-label">Besatz</div>
+    ${renderStockSummary()}
     <div class="section-label">Bewertung</div>
     ${renderRecommendations()}
     <div class="section-label">Letzter Eintrag: ${formatDate(latest.date)}</div>
@@ -1716,6 +1759,9 @@ function buildPrintReport(){
     .map(base => getEffectiveParam(base.key))
     .filter(p => chron.some(e => e[p.key] !== null && e[p.key] !== undefined && e[p.key] !== ''));
 
+  const stock = getCurrentStock();
+  const stockTotal = stock.reduce((sum,s) => sum + s.count, 0);
+
   const el = ensureReportContainer();
   el.innerHTML = `
     <div class="pr-title">AquaLog – Wasserbericht</div>
@@ -1725,6 +1771,11 @@ function buildPrintReport(){
       <div class="pr-stat"><span>Letzter Test</span><b>${lastTest ? formatDate(lastTest.date) : '–'}</b></div>
       <div class="pr-stat"><span>Letzter Wasserwechsel</span><b>${lastWC ? formatDate(lastWC.date) : '–'}</b></div>
     </div>
+    <div class="pr-section-title">Aktueller Besatz</div>
+    ${stock.length === 0
+      ? `<div class="empty-hint">Kein Besatz eingetragen.</div>`
+      : `<div class="pr-sub" style="margin:-6px 0 8px;">${stockTotal} Tier${stockTotal===1?'':'e'} · ${stock.length} Art${stock.length===1?'':'en'}</div>
+         <div class="pr-stock-list">${stock.map(s => `<span class="pr-stock-chip">${escapeHtml(s.species)} × ${s.count}</span>`).join('')}</div>`}
     <div class="pr-section-title">Bewertung</div>
     ${recs.length === 0
       ? `<div class="pr-rec good">✓ Alle gemessenen Werte waren zuletzt im Idealbereich.</div>`
