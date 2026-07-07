@@ -8,6 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0F1B1E">
 <title>AquaLog</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root{
     --bg: #0F1B1E;
@@ -124,6 +125,38 @@
   .spark{ align-self:flex-end; opacity:0.9; }
   .empty-hint{ font-size:11px; color:var(--text-muted); }
 
+  /* Trends */
+  .param-chips{ display:flex; flex-wrap:wrap; gap:8px; padding-bottom:14px; }
+  .param-chip{
+    flex-shrink:0;
+    padding:8px 14px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size:13px;
+    cursor:pointer;
+    white-space:nowrap;
+    display:flex; align-items:center; gap:6px;
+  }
+  .param-chip .dot{ width:7px; height:7px; border-radius:50%; }
+  .param-chip.active{ background: var(--surface-2); color:var(--text); border-color: var(--accent); }
+  .chart-card{
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:16px 12px 12px;
+  }
+  .chart-card .stats-row{
+    display:flex; justify-content:space-between; padding:0 6px 14px;
+  }
+  .chart-stat{ display:flex; flex-direction:column; gap:2px; }
+  .chart-stat .label{ font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted); }
+  .chart-stat .value{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; }
+  .chart-wrap{ position:relative; height:220px; }
+  .legend-row{ display:flex; gap:16px; justify-content:center; margin-top:10px; font-size:11px; color:var(--text-muted); }
+  .legend-row .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+
   .empty-state{
     text-align:center; padding: 60px 20px; color:var(--text-muted);
   }
@@ -155,22 +188,24 @@
     backdrop-filter: blur(10px);
     border-top:1px solid var(--border);
     display:flex; align-items:center; justify-content:space-around;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
   }
   .nav-btn{
     background:none; border:none; color:var(--text-muted);
     display:flex; flex-direction:column; align-items:center; gap:3px;
-    font-size:11px; cursor:pointer; padding:6px 14px;
+    font-size:11px; cursor:pointer; padding:6px 10px;
   }
   .nav-btn.active{ color: var(--accent); }
   .fab{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom: calc(52px + env(safe-area-inset-bottom));
     width:54px; height:54px; border-radius:50%;
     background: var(--accent); color:#06181A;
     display:flex; align-items:center; justify-content:center;
     font-size:26px; font-weight:400;
     border:none; cursor:pointer;
-    margin-top:-30px;
     box-shadow: 0 6px 18px rgba(79,182,196,0.35);
+    z-index:10;
   }
 
   /* Modal */
@@ -196,6 +231,11 @@
   }
   .field textarea{ font-family:'Inter',sans-serif; resize:none; height:56px; }
   .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .field label.checkbox-label{
+    display:flex; align-items:center; gap:9px; cursor:pointer;
+    font-size:14px; color:var(--text); margin-bottom:0;
+  }
+  .checkbox-label input[type=checkbox]{ width:18px; height:18px; accent-color: var(--accent); flex-shrink:0; }
   .btn{
     width:100%; padding:13px; border-radius:12px; border:none;
     font-size:15px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;
@@ -234,8 +274,9 @@ const PARAMS = [
 ];
 const STATUS_COLOR = { good:'#6FBF73', warn:'#E8A33D', danger:'#E8604C', none:'#3a4a4d' };
 
-let state = { tanks: [], entries: [], activeTankId: null };
-let ui = { tab:'overview', modal:null, editingEntryId:null, tankModalMode:null };
+let state = { tanks: [], entries: [], events: [], activeTankId: null };
+let ui = { tab:'overview', modal:null, editingEntryId:null, editingEventId:null, tankModalMode:null, selectedParam:'ph' };
+let trendChart = null;
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
@@ -284,9 +325,14 @@ async function loadState(){
     }
   }catch(e){
     const firstTank = { id: uid(), name: 'Mein Aquarium' };
-    state = { tanks:[firstTank], entries:[], activeTankId: firstTank.id };
+    state = { tanks:[firstTank], entries:[], events:[], activeTankId: firstTank.id };
     await saveState();
   }
+  normalizeState();
+  render();
+}
+
+function normalizeState(){
   // Firebase Realtime Database drops empty arrays/objects on save, so a field
   // that was an empty list comes back as undefined after a reload. Normalize.
   if(!Array.isArray(state.tanks)){
@@ -295,13 +341,15 @@ async function loadState(){
   if(!Array.isArray(state.entries)){
     state.entries = state.entries ? Object.values(state.entries) : [];
   }
+  if(!Array.isArray(state.events)){
+    state.events = state.events ? Object.values(state.events) : [];
+  }
   if(state.tanks.length === 0){
     const firstTank = { id: uid(), name: 'Mein Aquarium' };
     state.tanks = [firstTank];
     state.activeTankId = firstTank.id;
   }
   if(!state.activeTankId && state.tanks.length){ state.activeTankId = state.tanks[0].id; }
-  render();
 }
 
 async function saveState(){
@@ -353,6 +401,11 @@ function tankEntries(){
     .filter(e => e.tankId === state.activeTankId)
     .sort((a,b) => a.date < b.date ? 1 : -1);
 }
+function tankEvents(){
+  return (state.events || [])
+    .filter(e => e.tankId === state.activeTankId)
+    .sort((a,b) => a.date < b.date ? 1 : -1);
+}
 function lastValueFor(key){
   const entries = tankEntries();
   for(const e of entries){
@@ -396,11 +449,17 @@ function render(){
       <button class="icon-btn" onclick="openTankModal()">⚙</button>
     </header>
     <main id="main"></main>
+    <button class="fab" onclick="openAddModal()">+</button>
     <nav>
       <button class="nav-btn ${ui.tab==='overview'?'active':''}" onclick="setTab('overview')">
         <span>◔</span>Übersicht
       </button>
-      <button class="fab" onclick="openEntryModal()">+</button>
+      <button class="nav-btn ${ui.tab==='trends'?'active':''}" onclick="setTab('trends')">
+        <span>📈</span>Trends
+      </button>
+      <button class="nav-btn ${ui.tab==='events'?'active':''}" onclick="setTab('events')">
+        <span>🛠</span>Pflege
+      </button>
       <button class="nav-btn ${ui.tab==='history'?'active':''}" onclick="setTab('history')">
         <span>≣</span>Verlauf
       </button>
@@ -418,6 +477,8 @@ function renderMain(){
     return;
   }
   if(ui.tab === 'overview'){ renderOverview(main); }
+  else if(ui.tab === 'trends'){ renderTrends(main); }
+  else if(ui.tab === 'events'){ renderEvents(main); }
   else { renderHistory(main); }
 }
 
@@ -456,6 +517,144 @@ function renderOverview(main){
   `;
 }
 
+function renderTrends(main){
+  const entries = tankEntries();
+  if(entries.length === 0){
+    main.innerHTML = `<div class="empty-state"><div class="big">📈</div>Noch keine Messwerte für Trends.<br>Tippe unten auf <b>+</b>, um deinen ersten Eintrag zu machen.</div>`;
+    return;
+  }
+  const param = PARAMS.find(p => p.key === ui.selectedParam) || PARAMS[0];
+  const chips = PARAMS.map(p => `
+    <button class="param-chip ${p.key===param.key?'active':''}" onclick="selectTrendParam('${p.key}')">
+      <span class="dot" style="background:${STATUS_COLOR.good}"></span>${p.label.split(' ')[0]}
+    </button>
+  `).join('');
+
+  const chron = entries.slice().reverse();
+  const withVal = chron.filter(e => e[param.key] !== null && e[param.key] !== undefined && e[param.key] !== '');
+
+  if(withVal.length === 0){
+    main.innerHTML = `
+      <div class="section-label">Trend wählen</div>
+      <div class="param-chips">${chips}</div>
+      <div class="empty-state"><div class="big">💧</div>Für ${escapeHtml(param.label)} liegen noch keine Werte vor.</div>
+    `;
+    return;
+  }
+
+  const values = withVal.map(e => Number(e[param.key]));
+  const latestVal = values[values.length - 1];
+  const avgVal = values.reduce((a,b)=>a+b,0) / values.length;
+  const latestStatus = getStatus(param, latestVal) || 'good';
+
+  main.innerHTML = `
+    <div class="section-label">Trend wählen</div>
+    <div class="param-chips">${chips}</div>
+    <div class="chart-card">
+      <div class="stats-row">
+        <div class="chart-stat">
+          <div class="label">Aktuell</div>
+          <div class="value" style="color:${STATUS_COLOR[latestStatus]}">${fmt(param, latestVal)}${param.unit}</div>
+        </div>
+        <div class="chart-stat">
+          <div class="label">Durchschnitt</div>
+          <div class="value">${fmt(param, avgVal)}${param.unit}</div>
+        </div>
+        <div class="chart-stat">
+          <div class="label">Messungen</div>
+          <div class="value">${values.length}</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="trend-canvas"></canvas></div>
+      <div class="legend-row">
+        <span><span class="dot" style="background:rgba(111,191,115,0.35)"></span>Idealbereich</span>
+        <span><span class="dot" style="background:${STATUS_COLOR.good}"></span>Messwert</span>
+      </div>
+    </div>
+  `;
+
+  drawTrendChart(param, withVal);
+}
+
+function selectTrendParam(key){
+  ui.selectedParam = key;
+  render();
+}
+
+function drawTrendChart(param, withVal){
+  const canvas = document.getElementById('trend-canvas');
+  if(!canvas || typeof Chart === 'undefined') return;
+  if(trendChart){ trendChart.destroy(); trendChart = null; }
+
+  const labels = withVal.map(e => formatDate(e.date));
+  const values = withVal.map(e => Number(e[param.key]));
+  const pointColors = values.map(v => STATUS_COLOR[getStatus(param, v) || 'good']);
+  const goodMin = param.good[0];
+  const goodMax = param.good[1];
+
+  trendChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Idealbereich unten',
+          data: labels.map(()=>goodMin),
+          borderColor: 'transparent',
+          pointRadius: 0,
+          fill: false,
+          order: 3
+        },
+        {
+          label: 'Idealbereich',
+          data: labels.map(()=>goodMax),
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(111,191,115,0.15)',
+          pointRadius: 0,
+          fill: '-1',
+          order: 2
+        },
+        {
+          label: param.label,
+          data: values,
+          borderColor: '#4FB6C4',
+          backgroundColor: 'rgba(79,182,196,0.12)',
+          pointBackgroundColor: pointColors,
+          pointBorderColor: pointColors,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          fill: false,
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: (item) => item.datasetIndex === 2,
+          callbacks: {
+            label: (item) => `${param.label}: ${item.formattedValue}${param.unit}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8FA6A3', font: { size: 10 } },
+          grid: { color: 'rgba(143,166,163,0.08)' }
+        },
+        y: {
+          ticks: { color: '#8FA6A3', font: { size: 10 } },
+          grid: { color: 'rgba(143,166,163,0.08)' }
+        }
+      }
+    }
+  });
+}
+
 function renderHistory(main){
   const entries = tankEntries();
   if(entries.length === 0){
@@ -478,6 +677,52 @@ function renderHistory(main){
   `;
 }
 
+function renderEvents(main){
+  const events = tankEvents();
+  if(events.length === 0){
+    main.innerHTML = `<div class="empty-state"><div class="big">🛠</div>Noch keine Wartungs- oder Besatz-Einträge.<br>Tippe unten auf <b>+</b> und wähle "Wartung" oder "Besatz".</div>`;
+    return;
+  }
+  const typeLabels = { einsatz:'Einsatz', verlust:'Verlust', krankheit:'Krankheit', beobachtung:'Beobachtung' };
+  main.innerHTML = `
+    <div class="section-label">Wartung &amp; Besatz</div>
+    ${events.map(e => {
+      if(e.kind === 'maintenance'){
+        const tags = [];
+        if(e.waterChangePercent != null || e.waterChangeLiters != null){
+          const parts = [];
+          if(e.waterChangePercent != null) parts.push(`${e.waterChangePercent}%`);
+          if(e.waterChangeLiters != null) parts.push(`${e.waterChangeLiters} L`);
+          tags.push(`<span class="tag">💧 Wasserwechsel <b>${parts.join(' / ')}</b></span>`);
+        }
+        if(e.filterCleaned) tags.push(`<span class="tag">Filter gereinigt</span>`);
+        if(e.plantsTrimmed) tags.push(`<span class="tag">Pflanzen geschnitten</span>`);
+        if(e.fertilized) tags.push(`<span class="tag">Dünger</span>`);
+        if(e.co2Adjusted) tags.push(`<span class="tag">CO₂ angepasst</span>`);
+        return `
+          <div class="history-item" onclick="openMaintenanceModal('${e.id}')">
+            <div class="date">🛠 ${formatDate(e.date)}</div>
+            <div class="vals">${tags.join('') || '<span class="tag">Wartung</span>'}</div>
+            ${e.note ? `<div class="note">"${escapeHtml(e.note)}"</div>` : ''}
+          </div>
+        `;
+      } else {
+        const label = typeLabels[e.stockingType] || e.stockingType;
+        return `
+          <div class="history-item" onclick="openStockingModal('${e.id}')">
+            <div class="date">🐟 ${formatDate(e.date)} · ${label}</div>
+            <div class="vals">
+              ${e.species ? `<span class="tag"><b>${escapeHtml(e.species)}</b></span>` : ''}
+              ${e.count != null ? `<span class="tag">Anzahl <b>${e.count}</b></span>` : ''}
+            </div>
+            ${e.note ? `<div class="note">"${escapeHtml(e.note)}"</div>` : ''}
+          </div>
+        `;
+      }
+    }).join('')}
+  `;
+}
+
 function formatDate(iso){
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -491,12 +736,23 @@ function escapeHtml(str){
 function setTab(tab){ ui.tab = tab; render(); }
 
 /* ---------- Entry modal ---------- */
+function openAddModal(){ ui.modal = 'choose'; render(); }
 function openEntryModal(entryId){
   ui.modal = 'entry';
   ui.editingEntryId = entryId || null;
   render();
 }
-function closeModal(){ ui.modal = null; ui.editingEntryId = null; ui.tankModalMode = null; render(); }
+function openMaintenanceModal(eventId){
+  ui.modal = 'maintenance';
+  ui.editingEventId = eventId || null;
+  render();
+}
+function openStockingModal(eventId){
+  ui.modal = 'stocking';
+  ui.editingEventId = eventId || null;
+  render();
+}
+function closeModal(){ ui.modal = null; ui.editingEntryId = null; ui.editingEventId = null; ui.tankModalMode = null; render(); }
 
 function openTankModal(){ ui.modal = 'tank'; render(); }
 
@@ -506,7 +762,17 @@ function renderModal(){
   overlay.className = 'overlay';
   overlay.onclick = (ev) => { if(ev.target === overlay) closeModal(); };
 
-  if(ui.modal === 'entry'){
+  if(ui.modal === 'choose'){
+    overlay.innerHTML = `
+      <div class="sheet">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="sheet-title">Was möchtest du eintragen?</div>
+        <button class="btn btn-ghost" onclick="openEntryModal()">💧 Wasserwerte</button>
+        <button class="btn btn-ghost" onclick="openMaintenanceModal()">🛠 Wartung</button>
+        <button class="btn btn-ghost" onclick="openStockingModal()">🐟 Besatz</button>
+      </div>
+    `;
+  } else if(ui.modal === 'entry'){
     const editing = ui.editingEntryId ? state.entries.find(e => e.id === ui.editingEntryId) : null;
     const today = new Date().toISOString().slice(0,10);
     overlay.innerHTML = `
@@ -546,6 +812,86 @@ function renderModal(){
         <button class="btn btn-ghost" onclick="exportData()">Daten exportieren (Backup-Datei)</button>
         <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">Daten importieren</button>
         <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importData(this.files[0])">
+      </div>
+    `;
+  } else if(ui.modal === 'maintenance'){
+    const editing = ui.editingEventId ? state.events.find(e => e.id === ui.editingEventId) : null;
+    const today = new Date().toISOString().slice(0,10);
+    overlay.innerHTML = `
+      <div class="sheet">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="sheet-title">${editing ? 'Wartung bearbeiten' : 'Wartung eintragen'}</div>
+        <div class="field">
+          <label>Datum</label>
+          <input type="date" id="f-date" value="${editing ? editing.date : today}">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Wasserwechsel (%)</label>
+            <input type="number" step="5" id="f-wc-percent" value="${editing && editing.waterChangePercent != null ? editing.waterChangePercent : ''}" placeholder="–">
+          </div>
+          <div class="field">
+            <label>Wasserwechsel (Liter)</label>
+            <input type="number" step="1" id="f-wc-liters" value="${editing && editing.waterChangeLiters != null ? editing.waterChangeLiters : ''}" placeholder="–">
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkbox-label"><input type="checkbox" id="f-filter" ${editing && editing.filterCleaned ? 'checked' : ''}> Filter gereinigt</label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label"><input type="checkbox" id="f-plants" ${editing && editing.plantsTrimmed ? 'checked' : ''}> Pflanzen zurückgeschnitten</label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label"><input type="checkbox" id="f-fert" ${editing && editing.fertilized ? 'checked' : ''}> Dünger zugegeben</label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label"><input type="checkbox" id="f-co2adj" ${editing && editing.co2Adjusted ? 'checked' : ''}> CO₂ angepasst</label>
+        </div>
+        <div class="field">
+          <label>Notiz (optional)</label>
+          <textarea id="f-note" placeholder="z.B. welcher Dünger, wie viel CO2 …">${editing && editing.note ? escapeHtml(editing.note) : ''}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="saveMaintenance()">${editing ? 'Änderungen speichern' : 'Wartung speichern'}</button>
+        ${editing ? `<button class="btn btn-danger" onclick="deleteEvent('${editing.id}')">Eintrag löschen</button>` : ''}
+      </div>
+    `;
+  } else if(ui.modal === 'stocking'){
+    const editing = ui.editingEventId ? state.events.find(e => e.id === ui.editingEventId) : null;
+    const today = new Date().toISOString().slice(0,10);
+    const stockingTypes = [
+      {key:'einsatz', label:'Einsatz'},
+      {key:'verlust', label:'Verlust'},
+      {key:'krankheit', label:'Krankheit'},
+      {key:'beobachtung', label:'Beobachtung'}
+    ];
+    overlay.innerHTML = `
+      <div class="sheet">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="sheet-title">${editing ? 'Besatz-Eintrag bearbeiten' : 'Besatz eintragen'}</div>
+        <div class="field">
+          <label>Datum</label>
+          <input type="date" id="f-date" value="${editing ? editing.date : today}">
+        </div>
+        <div class="field">
+          <label>Art</label>
+          <select id="f-stocking-type">
+            ${stockingTypes.map(t => `<option value="${t.key}" ${editing && editing.stockingType===t.key ? 'selected' : ''}>${t.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>Fischart / Bezeichnung</label>
+          <input type="text" id="f-species" value="${editing && editing.species ? escapeHtml(editing.species) : ''}" placeholder="z.B. Panzerwelse">
+        </div>
+        <div class="field">
+          <label>Anzahl (optional)</label>
+          <input type="number" step="1" id="f-count" value="${editing && editing.count != null ? editing.count : ''}" placeholder="–">
+        </div>
+        <div class="field">
+          <label>Notiz (optional)</label>
+          <textarea id="f-note" placeholder="z.B. Panzerwelse haben gelaicht">${editing && editing.note ? escapeHtml(editing.note) : ''}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="saveStocking()">${editing ? 'Änderungen speichern' : 'Eintrag speichern'}</button>
+        ${editing ? `<button class="btn btn-danger" onclick="deleteEvent('${editing.id}')">Eintrag löschen</button>` : ''}
       </div>
     `;
   }
@@ -597,6 +943,60 @@ async function deleteEntry(id){
   closeModal();
 }
 
+async function saveMaintenance(){
+  const date = document.getElementById('f-date').value;
+  if(!date){ alert('Bitte ein Datum wählen.'); return; }
+  const pctRaw = document.getElementById('f-wc-percent').value;
+  const litersRaw = document.getElementById('f-wc-liters').value;
+  const data = {
+    kind: 'maintenance',
+    date,
+    waterChangePercent: pctRaw === '' ? null : Number(pctRaw),
+    waterChangeLiters: litersRaw === '' ? null : Number(litersRaw),
+    filterCleaned: document.getElementById('f-filter').checked,
+    plantsTrimmed: document.getElementById('f-plants').checked,
+    fertilized: document.getElementById('f-fert').checked,
+    co2Adjusted: document.getElementById('f-co2adj').checked,
+    note: document.getElementById('f-note').value.trim()
+  };
+  if(ui.editingEventId){
+    const idx = state.events.findIndex(e => e.id === ui.editingEventId);
+    state.events[idx] = { ...state.events[idx], ...data };
+  } else {
+    state.events.push({ id: uid(), tankId: state.activeTankId, ...data });
+  }
+  await saveState();
+  closeModal();
+}
+
+async function saveStocking(){
+  const date = document.getElementById('f-date').value;
+  if(!date){ alert('Bitte ein Datum wählen.'); return; }
+  const countRaw = document.getElementById('f-count').value;
+  const data = {
+    kind: 'stocking',
+    date,
+    stockingType: document.getElementById('f-stocking-type').value,
+    species: document.getElementById('f-species').value.trim(),
+    count: countRaw === '' ? null : Number(countRaw),
+    note: document.getElementById('f-note').value.trim()
+  };
+  if(ui.editingEventId){
+    const idx = state.events.findIndex(e => e.id === ui.editingEventId);
+    state.events[idx] = { ...state.events[idx], ...data };
+  } else {
+    state.events.push({ id: uid(), tankId: state.activeTankId, ...data });
+  }
+  await saveState();
+  closeModal();
+}
+
+async function deleteEvent(id){
+  state.events = (state.events || []).filter(e => e.id !== id);
+  await saveState();
+  closeModal();
+}
+
 async function addTank(){
   const input = document.getElementById('new-tank-name');
   const name = input.value.trim();
@@ -622,6 +1022,7 @@ async function deleteTank(id){
   if(!confirm('Dieses Aquarium inklusive aller Messwerte löschen?')) return;
   state.tanks = state.tanks.filter(t => t.id !== id);
   state.entries = state.entries.filter(e => e.tankId !== id);
+  state.events = (state.events || []).filter(e => e.tankId !== id);
   if(state.activeTankId === id){ state.activeTankId = state.tanks[0].id; }
   await saveState();
   render();
@@ -649,7 +1050,7 @@ async function importData(file){
     if(!parsed.tanks || !parsed.entries){ throw new Error('invalid'); }
     if(!confirm('Aktuelle Daten in der App durch die Backup-Datei ersetzen?')) return;
     state = parsed;
-    if(!state.activeTankId && state.tanks.length){ state.activeTankId = state.tanks[0].id; }
+    normalizeState();
     await saveState();
     render();
   }catch(e){
