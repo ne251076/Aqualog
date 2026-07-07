@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0F1B1E">
+<title>AquaLog</title>
+<style>
+  :root{
+    --bg: #0F1B1E;
+    --surface: #16262A;
+    --surface-2: #1D3034;
+    --border: #24393D;
+    --text: #EDF3F2;
+    --text-muted: #8FA6A3;
+    --good: #6FBF73;
+    --warn: #E8A33D;
+    --danger: #E8604C;
+    --accent: #4FB6C4;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:480px;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    background:
+      radial-gradient(120% 60% at 50% 0%, rgba(79,182,196,0.10), transparent 60%),
+      var(--bg);
+  }
+  .mono{ font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace; }
+
+  /* Top bar */
+  header{
+    padding: 18px 18px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand-title{
+    font-family: 'Space Grotesk','Inter',sans-serif;
+    font-size: 20px;
+    font-weight:700;
+    letter-spacing: 0.2px;
+  }
+  .brand-title span{ color: var(--accent); }
+  .tank-select{
+    background:none; border:none; color:var(--text-muted); font-size:13px;
+    padding:0; display:flex; align-items:center; gap:6px; cursor:pointer;
+  }
+  .tank-select b{ color:var(--text); font-weight:600; }
+  .icon-btn{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    width:38px; height:38px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    color: var(--text-muted); cursor:pointer;
+  }
+  .icon-btn:active{ background: var(--surface-2); }
+
+  main{ flex:1; padding: 16px 16px 100px; overflow-y:auto; }
+
+  /* Tank chips */
+  .tank-chips{ display:flex; gap:8px; overflow-x:auto; padding-bottom:14px; }
+  .chip{
+    flex-shrink:0;
+    padding:7px 14px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size:13px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .chip.active{ background: var(--accent); color:#06181A; border-color:var(--accent); font-weight:600; }
+
+  .section-label{
+    font-size:11px; text-transform:uppercase; letter-spacing:1.2px;
+    color:var(--text-muted); margin: 4px 2px 10px;
+  }
+
+  /* Param grid */
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .card{
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:14px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .card-top{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .param-label{ font-size:12px; color:var(--text-muted); }
+  .status-dot{ width:8px; height:8px; border-radius:50%; margin-top:4px; }
+  .status-dot.good{ background: var(--good); }
+  .status-dot.warn{ background: var(--warn); }
+  .status-dot.danger{ background: var(--danger); }
+  .status-dot.none{ background: #3a4a4d; }
+  .param-value{ font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; }
+  .param-value small{ font-size:13px; font-weight:500; color:var(--text-muted); margin-left:3px; }
+  .swatch{
+    height:8px; border-radius:5px; position:relative; margin-top:2px;
+  }
+  .swatch .pointer{
+    position:absolute; top:-3px; width:2px; height:14px; background:#fff;
+    border-radius:2px; box-shadow:0 0 0 1px rgba(0,0,0,0.4);
+  }
+  .spark{ align-self:flex-end; opacity:0.9; }
+  .empty-hint{ font-size:11px; color:var(--text-muted); }
+
+  .empty-state{
+    text-align:center; padding: 60px 20px; color:var(--text-muted);
+  }
+  .empty-state .big{ font-size:40px; margin-bottom:10px; }
+
+  /* History */
+  .history-item{
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:12px 14px;
+    margin-bottom:10px;
+    cursor:pointer;
+  }
+  .history-item .date{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; }
+  .history-item .vals{ margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+  .tag{
+    font-size:11px; padding:3px 8px; border-radius:7px;
+    background: var(--surface-2); color:var(--text-muted);
+  }
+  .tag b{ color:var(--text); }
+  .history-item .note{ margin-top:6px; font-size:12px; color:var(--text-muted); font-style:italic; }
+
+  /* Bottom nav */
+  nav{
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+    width:100%; max-width:480px;
+    background: rgba(22,38,42,0.92);
+    backdrop-filter: blur(10px);
+    border-top:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-around;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  .nav-btn{
+    background:none; border:none; color:var(--text-muted);
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    font-size:11px; cursor:pointer; padding:6px 14px;
+  }
+  .nav-btn.active{ color: var(--accent); }
+  .fab{
+    width:54px; height:54px; border-radius:50%;
+    background: var(--accent); color:#06181A;
+    display:flex; align-items:center; justify-content:center;
+    font-size:26px; font-weight:400;
+    border:none; cursor:pointer;
+    margin-top:-30px;
+    box-shadow: 0 6px 18px rgba(79,182,196,0.35);
+  }
+
+  /* Modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(6,12,13,0.6);
+    display:flex; align-items:flex-end; justify-content:center; z-index:50;
+  }
+  .sheet{
+    width:100%; max-width:480px;
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 18px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height: 88vh; overflow-y:auto;
+    border-top:1px solid var(--border);
+  }
+  .sheet-title{ font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-bottom:14px; }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:12px; color:var(--text-muted); margin-bottom:5px; }
+  .field input, .field select, .field textarea{
+    width:100%; background: var(--surface-2); border:1px solid var(--border);
+    border-radius:10px; padding:10px 12px; color:var(--text); font-size:15px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .field textarea{ font-family:'Inter',sans-serif; resize:none; height:56px; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .btn{
+    width:100%; padding:13px; border-radius:12px; border:none;
+    font-size:15px; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif;
+  }
+  .btn-primary{ background: var(--accent); color:#06181A; }
+  .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger); margin-top:8px; }
+  .btn-ghost{ background:transparent; color:var(--text-muted); border:1px solid var(--border); margin-top:8px; }
+  .close-x{ position:absolute; top:16px; right:16px; color:var(--text-muted); background:none; border:none; font-size:20px; cursor:pointer; }
+  .sheet{ position:relative; }
+  .tank-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .tank-row input{ flex:1; }
+  .tank-row button{ flex-shrink:0; }
+  .loading{ text-align:center; padding:60px 0; color:var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="loading" id="loading">AquaLog wird geladen …</div>
+</div>
+
+<script>
+const PARAMS = [
+  {key:'ph',   label:'pH-Wert',              unit:'',     min:5.5, max:9.0, good:[6.5,7.5], warn:[6.0,8.0],  decimals:1, step:0.1},
+  {key:'temp', label:'Temperatur',           unit:'°C',   min:18,  max:32,  good:[24,27],   warn:[22,29],    decimals:1, step:0.1},
+  {key:'nh4',  label:'Ammonium (NH₄)',       unit:'mg/l', min:0,   max:3,   good:[0,0],     warn:[0,0.5],    decimals:2, step:0.05},
+  {key:'no2',  label:'Nitrit (NO₂)',         unit:'mg/l', min:0,   max:1,   good:[0,0],     warn:[0,0.25],   decimals:2, step:0.01},
+  {key:'no3',  label:'Nitrat (NO₃)',         unit:'mg/l', min:0,   max:80,  good:[0,20],    warn:[0,40],     decimals:0, step:1},
+  {key:'kh',   label:'Karbonathärte (KH)',   unit:'°dH',  min:0,   max:16,  good:[4,8],     warn:[2,12],     decimals:1, step:0.5},
+  {key:'gh',   label:'Gesamthärte (GH)',     unit:'°dH',  min:0,   max:20,  good:[6,12],    warn:[4,16],     decimals:1, step:0.5},
+  {key:'o2',   label:'Sauerstoff (O₂)',      unit:'mg/l', min:0,   max:10,  good:[6,10],    warn:[4,10],     decimals:1, step:0.1},
+  {key:'po4',  label:'Phosphat (PO₄)',       unit:'mg/l', min:0,   max:3,   good:[0,0.5],   warn:[0,1.0],    decimals:2, step:0.05},
+  {key:'fe',   label:'Eisen (Fe)',           unit:'mg/l', min:0,   max:1,   good:[0.05,0.3],warn:[0,0.5],    decimals:2, step:0.01},
+  {key:'sio2', label:'Silikat (SiO₂)',       unit:'mg/l', min:0,   max:5,   good:[0,0.5],   warn:[0,2],      decimals:2, step:0.1},
+  {key:'cu',   label:'Kupfer (Cu)',          unit:'mg/l', min:0,   max:1,   good:[0,0],     warn:[0,0.2],    decimals:2, step:0.01},
+  {key:'co2',  label:'CO₂',                  unit:'mg/l', min:0,   max:50,  good:[15,30],   warn:[10,40],    decimals:0, step:1},
+];
+const STATUS_COLOR = { good:'#6FBF73', warn:'#E8A33D', danger:'#E8604C', none:'#3a4a4d' };
+
+let state = { tanks: [], entries: [], activeTankId: null };
+let ui = { tab:'overview', modal:null, editingEntryId:null, tankModalMode:null };
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+const STORAGE_KEY = 'aqualog-data-v1';
+const FIREBASE_URL = 'https://aqualog-94d37-default-rtdb.europe-west1.firebasedatabase.app';
+const FIREBASE_PATH = 'aqualog/f7e3a9c2-51b8-4d6a-9c2e-8a1b6d4f0e77';
+
+async function storageGet(){
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${FIREBASE_PATH}.json`);
+    if(!res.ok) throw new Error('Firebase-Antwort nicht ok');
+    const data = await res.json();
+    const json = data ? JSON.stringify(data) : null;
+    if(json){ try{ localStorage.setItem(STORAGE_KEY, json); }catch(_){} }
+    return json;
+  }catch(e){
+    console.error('Firebase nicht erreichbar, nutze lokalen Zwischenspeicher', e);
+    return localStorage.getItem(STORAGE_KEY);
+  }
+}
+
+async function storageSet(value){
+  try{
+    const res = await fetch(`${FIREBASE_URL}/${FIREBASE_PATH}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: value
+    });
+    if(!res.ok) throw new Error('Firebase-Speichern fehlgeschlagen');
+    try{ localStorage.setItem(STORAGE_KEY, value); }catch(_){}
+    return true;
+  }catch(e){
+    console.error(e);
+    try{ localStorage.setItem(STORAGE_KEY, value); }catch(_){}
+    return false;
+  }
+}
+
+async function loadState(){
+  try{
+    const raw = await storageGet();
+    if(raw){
+      state = JSON.parse(raw);
+    } else {
+      throw new Error('empty');
+    }
+  }catch(e){
+    const firstTank = { id: uid(), name: 'Mein Aquarium' };
+    state = { tanks:[firstTank], entries:[], activeTankId: firstTank.id };
+    await saveState();
+  }
+  if(!state.activeTankId && state.tanks.length){ state.activeTankId = state.tanks[0].id; }
+  render();
+}
+
+async function saveState(){
+  const ok = await storageSet(JSON.stringify(state));
+  if(!ok){
+    console.error('Cloud-Speichern fehlgeschlagen, lokal zwischengespeichert');
+    alert('Konnte gerade nicht in die Cloud speichern (kein Internet?). Die Änderung ist vorerst nur lokal gesichert.');
+  }
+}
+
+function getStatus(param, value){
+  if(value === null || value === undefined || value === '' || isNaN(value)) return null;
+  const v = Number(value);
+  const [gMin,gMax] = param.good;
+  const [wMin,wMax] = param.warn;
+  if(v >= gMin && v <= gMax) return 'good';
+  if(v >= wMin && v <= wMax) return 'warn';
+  return 'danger';
+}
+
+function buildGradient(param){
+  const steps = 24;
+  let stops = [];
+  for(let i=0;i<=steps;i++){
+    const v = param.min + (param.max-param.min)*(i/steps);
+    const s = getStatus(param, v) || 'good';
+    stops.push(`${STATUS_COLOR[s]} ${(i/steps*100).toFixed(1)}%`);
+  }
+  return `linear-gradient(90deg, ${stops.join(',')})`;
+}
+
+function pointerPos(param, value){
+  const v = Number(value);
+  let pct = (v - param.min) / (param.max - param.min);
+  pct = Math.max(0, Math.min(1, pct));
+  return (pct*100).toFixed(1) + '%';
+}
+
+function fmt(param, value){
+  if(value === null || value === undefined || value === '') return null;
+  return Number(value).toFixed(param.decimals);
+}
+
+function activeTank(){
+  return state.tanks.find(t => t.id === state.activeTankId);
+}
+function tankEntries(){
+  return state.entries
+    .filter(e => e.tankId === state.activeTankId)
+    .sort((a,b) => a.date < b.date ? 1 : -1);
+}
+function lastValueFor(key){
+  const entries = tankEntries();
+  for(const e of entries){
+    if(e[key] !== null && e[key] !== undefined && e[key] !== '') return e;
+  }
+  return null;
+}
+function sparkValues(key, count){
+  const entries = tankEntries().slice().reverse(); // chronological
+  const vals = entries.filter(e => e[key] !== null && e[key] !== undefined && e[key] !== '').map(e => Number(e[key]));
+  return vals.slice(-count);
+}
+
+function sparkSvg(param){
+  const vals = sparkValues(param.key, 6);
+  if(vals.length < 2) return '';
+  const w=64,h=26,pad=3;
+  const min = Math.min(...vals, param.good[0]);
+  const max = Math.max(...vals, param.good[1]);
+  const range = (max-min) || 1;
+  const pts = vals.map((v,i) => {
+    const x = pad + (w-2*pad) * (i/(vals.length-1));
+    const y = h-pad - (h-2*pad) * ((v-min)/range);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const lastStatus = getStatus(param, vals[vals.length-1]) || 'good';
+  return `<svg class="spark" width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="${STATUS_COLOR[lastStatus]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const tank = activeTank();
+  app.innerHTML = `
+    <header>
+      <div class="brand">
+        <div class="brand-title">Aqua<span>Log</span></div>
+        <button class="tank-select" onclick="openTankModal()">
+          <b>${tank ? escapeHtml(tank.name) : 'Kein Aquarium'}</b> ▾
+        </button>
+      </div>
+      <button class="icon-btn" onclick="openTankModal()">⚙</button>
+    </header>
+    <main id="main"></main>
+    <nav>
+      <button class="nav-btn ${ui.tab==='overview'?'active':''}" onclick="setTab('overview')">
+        <span>◔</span>Übersicht
+      </button>
+      <button class="fab" onclick="openEntryModal()">+</button>
+      <button class="nav-btn ${ui.tab==='history'?'active':''}" onclick="setTab('history')">
+        <span>≣</span>Verlauf
+      </button>
+    </nav>
+  `;
+  renderMain();
+  renderModal();
+}
+
+function renderMain(){
+  const main = document.getElementById('main');
+  if(!activeTank()){
+    main.innerHTML = `<div class="empty-state"><div class="big">🐟</div>Leg zuerst ein Aquarium an.<br><br>
+      <button class="btn btn-primary" style="width:auto;padding:10px 20px;" onclick="openTankModal()">Aquarium anlegen</button></div>`;
+    return;
+  }
+  if(ui.tab === 'overview'){ renderOverview(main); }
+  else { renderHistory(main); }
+}
+
+function renderOverview(main){
+  const entries = tankEntries();
+  if(entries.length === 0){
+    main.innerHTML = `<div class="empty-state"><div class="big">💧</div>Noch keine Messwerte für dieses Aquarium.<br>Tippe unten auf <b>+</b>, um deinen ersten Eintrag zu machen.</div>`;
+    return;
+  }
+  const latest = entries[0];
+  const cards = PARAMS.map(p => {
+    const entryWithVal = lastValueFor(p.key);
+    const value = entryWithVal ? entryWithVal[p.key] : null;
+    const status = value !== null ? getStatus(p, value) : null;
+    const gradient = buildGradient(p);
+    const spark = sparkSvg(p);
+    return `
+      <div class="card">
+        <div class="card-top">
+          <div class="param-label">${p.label}</div>
+          <div class="status-dot ${status || 'none'}"></div>
+        </div>
+        ${value !== null ? `
+          <div class="param-value">${fmt(p,value)}<small>${p.unit}</small></div>
+          <div class="swatch" style="background:${gradient}">
+            <div class="pointer" style="left:${pointerPos(p,value)}"></div>
+          </div>
+          ${spark || '<div class="empty-hint">noch keine Trenddaten</div>'}
+        ` : `<div class="empty-hint">Kein Wert erfasst</div>`}
+      </div>
+    `;
+  }).join('');
+  main.innerHTML = `
+    <div class="section-label">Letzter Eintrag: ${formatDate(latest.date)}</div>
+    <div class="grid">${cards}</div>
+  `;
+}
+
+function renderHistory(main){
+  const entries = tankEntries();
+  if(entries.length === 0){
+    main.innerHTML = `<div class="empty-state"><div class="big">📋</div>Noch keine Einträge im Verlauf.</div>`;
+    return;
+  }
+  main.innerHTML = `
+    <div class="section-label">Alle Einträge</div>
+    ${entries.map(e => {
+      const tags = PARAMS.filter(p => e[p.key] !== null && e[p.key] !== undefined && e[p.key] !== '')
+        .map(p => `<span class="tag">${p.label.split(' ')[0]} <b>${fmt(p,e[p.key])}${p.unit}</b></span>`).join('');
+      return `
+        <div class="history-item" onclick="openEntryModal('${e.id}')">
+          <div class="date">${formatDate(e.date)}</div>
+          <div class="vals">${tags || '<span class="tag">Keine Werte</span>'}</div>
+          ${e.note ? `<div class="note">"${escapeHtml(e.note)}"</div>` : ''}
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+function formatDate(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function setTab(tab){ ui.tab = tab; render(); }
+
+/* ---------- Entry modal ---------- */
+function openEntryModal(entryId){
+  ui.modal = 'entry';
+  ui.editingEntryId = entryId || null;
+  render();
+}
+function closeModal(){ ui.modal = null; ui.editingEntryId = null; ui.tankModalMode = null; render(); }
+
+function openTankModal(){ ui.modal = 'tank'; render(); }
+
+function renderModal(){
+  if(!ui.modal) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.onclick = (ev) => { if(ev.target === overlay) closeModal(); };
+
+  if(ui.modal === 'entry'){
+    const editing = ui.editingEntryId ? state.entries.find(e => e.id === ui.editingEntryId) : null;
+    const today = new Date().toISOString().slice(0,10);
+    overlay.innerHTML = `
+      <div class="sheet">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="sheet-title">${editing ? 'Eintrag bearbeiten' : 'Neuer Messeintrag'}</div>
+        <div class="field">
+          <label>Datum</label>
+          <input type="date" id="f-date" value="${editing ? editing.date : today}">
+        </div>
+        ${renderEntryFields(editing)}
+        <div class="field">
+          <label>Notiz (optional)</label>
+          <textarea id="f-note" placeholder="z.B. Wasserwechsel 20%, Filter gereinigt …">${editing && editing.note ? escapeHtml(editing.note) : ''}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="saveEntry()">${editing ? 'Änderungen speichern' : 'Eintrag speichern'}</button>
+        ${editing ? `<button class="btn btn-danger" onclick="deleteEntry('${editing.id}')">Eintrag löschen</button>` : ''}
+      </div>
+    `;
+  } else if(ui.modal === 'tank'){
+    overlay.innerHTML = `
+      <div class="sheet">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        <div class="sheet-title">Aquarien verwalten</div>
+        ${state.tanks.map(t => `
+          <div class="tank-row">
+            <input type="text" value="${escapeHtml(t.name)}" onchange="renameTank('${t.id}', this.value)">
+            <button class="icon-btn" onclick="selectTank('${t.id}')" title="Auswählen">${t.id===state.activeTankId?'✓':'○'}</button>
+            <button class="icon-btn" onclick="deleteTank('${t.id}')" title="Löschen">🗑</button>
+          </div>
+        `).join('')}
+        <div class="tank-row" style="margin-top:14px;">
+          <input type="text" id="new-tank-name" placeholder="Name des neuen Aquariums">
+          <button class="icon-btn" onclick="addTank()">+</button>
+        </div>
+        <div class="section-label" style="margin-top:20px;">Datensicherung</div>
+        <button class="btn btn-ghost" onclick="exportData()">Daten exportieren (Backup-Datei)</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">Daten importieren</button>
+        <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importData(this.files[0])">
+      </div>
+    `;
+  }
+  document.getElementById('app').appendChild(overlay);
+}
+
+function renderEntryFields(editing){
+  let rows = '';
+  for(let i=0;i<PARAMS.length;i+=2){
+    const pair = PARAMS.slice(i,i+2);
+    rows += `<div class="field-row">${pair.map(p => fieldHtml(p, editing)).join('')}</div>`;
+  }
+  return rows;
+}
+
+function fieldHtml(p, editing){
+  const val = editing && editing[p.key] !== undefined && editing[p.key] !== null ? editing[p.key] : '';
+  return `
+    <div class="field">
+      <label>${p.label}${p.unit ? ' ('+p.unit+')' : ''}</label>
+      <input type="number" step="${p.step}" id="f-${p.key}" value="${val}" placeholder="–">
+    </div>
+  `;
+}
+
+async function saveEntry(){
+  const date = document.getElementById('f-date').value;
+  if(!date){ alert('Bitte ein Datum wählen.'); return; }
+  const data = { date };
+  PARAMS.forEach(p => {
+    const raw = document.getElementById('f-'+p.key).value;
+    data[p.key] = raw === '' ? null : Number(raw);
+  });
+  data.note = document.getElementById('f-note').value.trim();
+
+  if(ui.editingEntryId){
+    const idx = state.entries.findIndex(e => e.id === ui.editingEntryId);
+    state.entries[idx] = { ...state.entries[idx], ...data };
+  } else {
+    state.entries.push({ id: uid(), tankId: state.activeTankId, ...data });
+  }
+  await saveState();
+  closeModal();
+}
+
+async function deleteEntry(id){
+  state.entries = state.entries.filter(e => e.id !== id);
+  await saveState();
+  closeModal();
+}
+
+async function addTank(){
+  const input = document.getElementById('new-tank-name');
+  const name = input.value.trim();
+  if(!name) return;
+  const t = { id: uid(), name };
+  state.tanks.push(t);
+  state.activeTankId = t.id;
+  await saveState();
+  render();
+  openTankModal();
+}
+async function renameTank(id, name){
+  const t = state.tanks.find(t => t.id === id);
+  if(t && name.trim()){ t.name = name.trim(); await saveState(); }
+}
+async function selectTank(id){
+  state.activeTankId = id;
+  await saveState();
+  closeModal();
+}
+async function deleteTank(id){
+  if(state.tanks.length <= 1){ alert('Du brauchst mindestens ein Aquarium.'); return; }
+  if(!confirm('Dieses Aquarium inklusive aller Messwerte löschen?')) return;
+  state.tanks = state.tanks.filter(t => t.id !== id);
+  state.entries = state.entries.filter(e => e.tankId !== id);
+  if(state.activeTankId === id){ state.activeTankId = state.tanks[0].id; }
+  await saveState();
+  render();
+  openTankModal();
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `aqualog-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function importData(file){
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if(!parsed.tanks || !parsed.entries){ throw new Error('invalid'); }
+    if(!confirm('Aktuelle Daten in der App durch die Backup-Datei ersetzen?')) return;
+    state = parsed;
+    if(!state.activeTankId && state.tanks.length){ state.activeTankId = state.tanks[0].id; }
+    await saveState();
+    render();
+  }catch(e){
+    alert('Diese Datei konnte nicht gelesen werden. Bitte eine gültige AquaLog-Backup-Datei wählen.');
+  }
+}
+
+loadState();
+</script>
+</body>
+</html>
