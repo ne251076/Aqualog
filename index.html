@@ -287,6 +287,19 @@ async function loadState(){
     state = { tanks:[firstTank], entries:[], activeTankId: firstTank.id };
     await saveState();
   }
+  // Firebase Realtime Database drops empty arrays/objects on save, so a field
+  // that was an empty list comes back as undefined after a reload. Normalize.
+  if(!Array.isArray(state.tanks)){
+    state.tanks = state.tanks ? Object.values(state.tanks) : [];
+  }
+  if(!Array.isArray(state.entries)){
+    state.entries = state.entries ? Object.values(state.entries) : [];
+  }
+  if(state.tanks.length === 0){
+    const firstTank = { id: uid(), name: 'Mein Aquarium' };
+    state.tanks = [firstTank];
+    state.activeTankId = firstTank.id;
+  }
   if(!state.activeTankId && state.tanks.length){ state.activeTankId = state.tanks[0].id; }
   render();
 }
@@ -336,7 +349,7 @@ function activeTank(){
   return state.tanks.find(t => t.id === state.activeTankId);
 }
 function tankEntries(){
-  return state.entries
+  return (state.entries || [])
     .filter(e => e.tankId === state.activeTankId)
     .sort((a,b) => a.date < b.date ? 1 : -1);
 }
