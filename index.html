@@ -301,6 +301,42 @@
   }
   .lock-error{ color:var(--danger); font-size:12px; min-height:16px; }
   .lock-actions{ width:100%; max-width:260px; margin-top:6px; }
+
+  /* PDF-Bericht (Print-Layout) */
+  .print-report{
+    position:fixed; left:-10000px; top:0; width:794px;
+    background:#ffffff; color:#1a1a1a; font-family:'Inter',sans-serif;
+    padding:40px; box-sizing:border-box;
+  }
+  .pr-title{ font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700; color:#0F1B1E; }
+  .pr-sub{ font-size:13px; color:#666; margin-top:4px; margin-bottom:24px; }
+  .pr-summary{ display:flex; gap:16px; margin-bottom:10px; }
+  .pr-stat{ flex:1; border:1px solid #e0e0e0; border-radius:10px; padding:12px 14px; }
+  .pr-stat span{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#888; margin-bottom:4px; }
+  .pr-stat b{ font-family:'Space Grotesk',sans-serif; font-size:18px; color:#0F1B1E; }
+  .pr-section-title{
+    font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;
+    margin:26px 0 12px; border-bottom:2px solid #4FB6C4; padding-bottom:6px; color:#0F1B1E;
+  }
+  .pr-rec{ padding:8px 10px; border-radius:8px; margin-bottom:6px; font-size:12px; }
+  .pr-rec.warn{ background:#FEF3E2; color:#8a5a10; }
+  .pr-rec.danger{ background:#FDEAE7; color:#a3291b; }
+  .pr-rec.good{ background:#EAF7EB; color:#2f7a34; font-weight:600; }
+  .pr-chart-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:10px; }
+  .pr-chart-card{ border:1px solid #e5e5e5; border-radius:10px; padding:10px 12px 6px; break-inside:avoid; }
+  .pr-chart-title{ font-size:12px; font-weight:600; color:#333; margin-bottom:6px; }
+  .pr-table{ width:100%; border-collapse:collapse; font-size:11px; margin-top:8px; }
+  .pr-table th, .pr-table td{ border:1px solid #e5e5e5; padding:5px 6px; text-align:center; }
+  .pr-table th{ background:#f5f5f5; font-weight:600; color:#333; }
+  .pr-footer{ margin-top:30px; font-size:10px; color:#999; text-align:center; }
+
+  @media print{
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body *{ visibility:hidden; }
+    #print-report, #print-report *{ visibility:visible; }
+    #print-report{ position:absolute; left:0; top:0; width:100%; }
+    @page{ margin:14mm; }
+  }
 </style>
 </head>
 <body>
@@ -571,7 +607,10 @@ function render(){
           <b>${tank ? escapeHtml(tank.name) : 'Kein Aquarium'}</b> ▾
         </button>
       </div>
-      <button class="icon-btn" onclick="openTankModal()">⚙</button>
+      <div style="display:flex; gap:8px;">
+        <button class="icon-btn" onclick="generateReport()" title="PDF-Bericht">📄</button>
+        <button class="icon-btn" onclick="openTankModal()">⚙</button>
+      </div>
     </header>
     <main id="main"></main>
     <button class="fab" onclick="openAddModal()">+</button>
@@ -1494,11 +1533,125 @@ function forgotPin(){
   }
 }
 
+/* ---------- PDF-Bericht ---------- */
 function lockNow(){
   ui.modal = null;
   initLock();
 }
 
+let reportCharts = [];
+
+function ensureReportContainer(){
+  let el = document.getElementById('print-report');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'print-report';
+    el.className = 'print-report';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function buildReportTable(rows, paramsWithData){
+  if(rows.length === 0) return '<div class="empty-hint">Keine Messungen vorhanden.</div>';
+  return `
+    <table class="pr-table">
+      <thead><tr><th>Datum</th>${paramsWithData.map(p => `<th>${escapeHtml(p.label.split(' ')[0])}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${rows.map(e => `
+          <tr>
+            <td>${formatDate(e.date)}</td>
+            ${paramsWithData.map(p => `<td>${(e[p.key] !== null && e[p.key] !== undefined && e[p.key] !== '') ? fmt(p, e[p.key]) : '–'}</td>`).join('')}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildPrintReport(){
+  reportCharts.forEach(c => c.destroy());
+  reportCharts = [];
+
+  const tank = activeTank();
+  const entries = tankEntries();
+  const chron = entries.slice().reverse();
+  const recs = getRecommendations();
+  const lastTest = entries[0];
+  const lastWC = lastWaterChangeEvent();
+
+  const paramsWithData = PARAMS
+    .map(base => getEffectiveParam(base.key))
+    .filter(p => chron.some(e => e[p.key] !== null && e[p.key] !== undefined && e[p.key] !== ''));
+
+  const el = ensureReportContainer();
+  el.innerHTML = `
+    <div class="pr-title">AquaLog – Wasserbericht</div>
+    <div class="pr-sub">${escapeHtml(tank ? tank.name : '')} · erstellt am ${new Date().toLocaleDateString('de-DE')}</div>
+    <div class="pr-summary">
+      <div class="pr-stat"><span>Messungen gesamt</span><b>${entries.length}</b></div>
+      <div class="pr-stat"><span>Letzter Test</span><b>${lastTest ? formatDate(lastTest.date) : '–'}</b></div>
+      <div class="pr-stat"><span>Letzter Wasserwechsel</span><b>${lastWC ? formatDate(lastWC.date) : '–'}</b></div>
+    </div>
+    <div class="pr-section-title">Bewertung</div>
+    ${recs.length === 0
+      ? `<div class="pr-rec good">✓ Alle gemessenen Werte waren zuletzt im Idealbereich.</div>`
+      : recs.map(r => `<div class="pr-rec ${r.status}">${escapeHtml(r.param.label)} (${fmt(r.param, r.value)}${r.param.unit}): ${escapeHtml(r.message)}</div>`).join('')}
+    <div class="pr-section-title">Verlauf der Werte</div>
+    <div class="pr-chart-grid">
+      ${paramsWithData.map(p => `
+        <div class="pr-chart-card">
+          <div class="pr-chart-title">${escapeHtml(p.label)}</div>
+          <canvas id="pr-chart-${p.key}" width="340" height="130"></canvas>
+        </div>
+      `).join('')}
+    </div>
+    <div class="pr-section-title">Letzte Messungen</div>
+    ${buildReportTable(entries.slice(0, 10), paramsWithData)}
+    <div class="pr-footer">Erstellt mit AquaLog · ${new Date().toLocaleString('de-DE')}</div>
+  `;
+
+  paramsWithData.forEach(p => {
+    const canvas = document.getElementById(`pr-chart-${p.key}`);
+    if(!canvas || typeof Chart === 'undefined') return;
+    const withVal = chron.filter(e => e[p.key] !== null && e[p.key] !== undefined && e[p.key] !== '');
+    const labels = withVal.map(e => formatDate(e.date));
+    const values = withVal.map(e => Number(e[p.key]));
+    const chart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { data: labels.map(()=>p.good[0]), borderColor:'transparent', pointRadius:0, fill:false },
+          { data: labels.map(()=>p.good[1]), borderColor:'transparent', backgroundColor:'rgba(79,182,196,0.18)', pointRadius:0, fill:'-1' },
+          { data: values, borderColor:'#1c7f8c', backgroundColor:'rgba(28,127,140,0.08)', pointRadius:2, pointBackgroundColor:'#1c7f8c', tension:0.3, fill:false }
+        ]
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        plugins: { legend: { display:false } },
+        scales: {
+          x: { ticks:{ color:'#888', font:{ size:9 } }, grid:{ color:'#eee' } },
+          y: { ticks:{ color:'#888', font:{ size:9 } }, grid:{ color:'#eee' } }
+        }
+      }
+    });
+    reportCharts.push(chart);
+  });
+}
+
+function generateReport(){
+  const entries = tankEntries();
+  if(entries.length === 0){
+    alert('Für dieses Aquarium liegen noch keine Messwerte vor.');
+    return;
+  }
+  buildPrintReport();
+  setTimeout(() => { window.print(); }, 350);
+}
+
+/* ---------- Start ---------- */
 initLock();
 </script>
 </body>
