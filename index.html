@@ -878,11 +878,17 @@ function renderTrends(main){
     return;
   }
   const param = getEffectiveParam(ui.selectedParam) || PARAMS[0];
-  const chips = PARAMS.map(p => `
+  const chips = PARAMS.map(base => {
+    const p = getEffectiveParam(base.key);
+    const entryWithVal = lastValueFor(p.key);
+    const status = entryWithVal ? getStatus(p, entryWithVal[p.key]) : null;
+    const dotColor = STATUS_COLOR[status || 'none'];
+    return `
     <button class="param-chip ${p.key===param.key?'active':''}" onclick="selectTrendParam('${p.key}')">
-      <span class="dot" style="background:${STATUS_COLOR.good}"></span>${p.label.split(' ')[0]}
+      <span class="dot" style="background:${dotColor}"></span>${p.label.split(' ')[0]}
     </button>
-  `).join('');
+  `;
+  }).join('');
 
   const chron = entries.slice().reverse();
   const withVal = chron.filter(e => e[param.key] !== null && e[param.key] !== undefined && e[param.key] !== '');
