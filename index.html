@@ -406,8 +406,8 @@
 const PARAMS = [
   {key:'ph',   label:'pH-Wert',              unit:'',     min:5.5, max:9.0, good:[6.5,7.5], warn:[6.0,8.0],  decimals:1, step:0.1},
   {key:'temp', label:'Temperatur',           unit:'°C',   min:18,  max:32,  good:[24,27],   warn:[22,29],    decimals:1, step:0.1},
-  {key:'nh4',  label:'Ammonium (NH₄)',       unit:'mg/l', min:0,   max:3,   good:[0,0],     warn:[0,0.5],    decimals:2, step:0.05},
-  {key:'no2',  label:'Nitrit (NO₂)',         unit:'mg/l', min:0,   max:1,   good:[0,0],     warn:[0,0.25],   decimals:2, step:0.01},
+  {key:'nh4',  label:'Ammonium (NH₄)',       unit:'mg/l', min:0,   max:3,   good:[0,0.25],  warn:[0,0.5],    decimals:2, step:0.05},
+  {key:'no2',  label:'Nitrit (NO₂)',         unit:'mg/l', min:0,   max:1,   good:[0,0.2],   warn:[0,0.4],    decimals:2, step:0.01},
   {key:'no3',  label:'Nitrat (NO₃)',         unit:'mg/l', min:0,   max:80,  good:[0,20],    warn:[0,40],     decimals:0, step:1},
   {key:'kh',   label:'Karbonathärte (KH)',   unit:'°dH',  min:0,   max:16,  good:[4,8],     warn:[2,12],     decimals:1, step:0.5},
   {key:'gh',   label:'Gesamthärte (GH)',     unit:'°dH',  min:0,   max:20,  good:[6,12],    warn:[4,16],     decimals:1, step:0.5},
