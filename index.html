@@ -1231,6 +1231,7 @@ function renderModal(){
         <button class="btn btn-ghost" onclick="openStockingModal()">🐟 Besatz</button>
         <button class="btn btn-ghost" onclick="openAssistantModal()">🔍 Besatz-Assistent</button>
         <button class="btn btn-ghost" onclick="closeModal(); generateReport();">📄 PDF-Bericht</button>
+        <button class="btn btn-ghost" onclick="refreshData()">🔄 Aktualisieren</button>
         <button class="btn btn-ghost" onclick="openTankModal()">⚙ Einstellungen</button>
       </div>
     `;
@@ -1973,6 +1974,29 @@ function generateReport(){
 }
 
 /* ---------- Start ---------- */
+async function refreshData(){
+  closeModal();
+  await loadState();
+}
+
+async function silentRefresh(){
+  if(ui.modal) return; // nicht mitten in einer offenen Eingabe stören
+  try{
+    const raw = await storageGet();
+    if(raw){
+      state = JSON.parse(raw);
+      normalizeState();
+      render();
+    }
+  }catch(e){ /* still offline or unreachable, ignore */ }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible'){
+    silentRefresh();
+  }
+});
+
 /* ---------- Start ---------- */
 initAuth();
 </script>
