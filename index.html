@@ -347,6 +347,16 @@
   .theme-btn.active{ background:var(--accent); color:#06181A; font-weight:600; border-color:var(--accent); }
   .loading{ text-align:center; padding:60px 0; color:var(--text-muted); }
 
+  /* Toast */
+  .toast{
+    position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
+    background: var(--good); color:#06181A; padding:12px 22px; border-radius:999px;
+    font-size:14px; font-weight:600; opacity:0; transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index:200; box-shadow:0 6px 20px rgba(0,0,0,0.35); pointer-events:none;
+    white-space:nowrap; max-width:90vw; text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
   /* Lock screen */
   .lock-screen{
     min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -479,6 +489,19 @@ let ui = { tab:'overview', modal:null, editingEntryId:null, editingEventId:null,
 let trendChart = null;
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function showToast(message){
+  const app = document.getElementById('app');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  app.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 2200);
+}
 
 /* ---------- Darstellung (Hell/Dunkel) ---------- */
 function getTheme(){
@@ -1535,9 +1558,13 @@ function fieldHtml(p, editing){
   `;
 }
 
+let isSavingEntry = false;
 async function saveEntry(){
+  if(isSavingEntry) return;
   const date = document.getElementById('f-date').value;
   if(!date){ alert('Bitte ein Datum wählen.'); return; }
+  isSavingEntry = true;
+  const editing = !!ui.editingEntryId;
   const data = { date };
   PARAMS.forEach(p => {
     const raw = document.getElementById('f-'+p.key).value;
@@ -1552,7 +1579,10 @@ async function saveEntry(){
     state.entries.push({ id: uid(), tankId: state.activeTankId, ...data });
   }
   await saveState();
+  isSavingEntry = false;
+  ui.tab = 'overview';
   closeModal();
+  showToast(editing ? 'Änderungen gespeichert ✓' : 'Eintrag gespeichert ✓');
 }
 
 async function deleteEntry(id){
@@ -1609,9 +1639,13 @@ async function saveTankSize(){
   openAssistantModal();
 }
 
+let isSavingMaintenance = false;
 async function saveMaintenance(){
+  if(isSavingMaintenance) return;
   const date = document.getElementById('f-date').value;
   if(!date){ alert('Bitte ein Datum wählen.'); return; }
+  isSavingMaintenance = true;
+  const editing = !!ui.editingEventId;
   const pctRaw = document.getElementById('f-wc-percent').value;
   const litersRaw = document.getElementById('f-wc-liters').value;
   const data = {
@@ -1632,12 +1666,19 @@ async function saveMaintenance(){
     state.events.push({ id: uid(), tankId: state.activeTankId, ...data });
   }
   await saveState();
+  isSavingMaintenance = false;
+  ui.tab = 'overview';
   closeModal();
+  showToast(editing ? 'Änderungen gespeichert ✓' : 'Wartung gespeichert ✓');
 }
 
+let isSavingStocking = false;
 async function saveStocking(){
+  if(isSavingStocking) return;
   const date = document.getElementById('f-date').value;
   if(!date){ alert('Bitte ein Datum wählen.'); return; }
+  isSavingStocking = true;
+  const editing = !!ui.editingEventId;
   const countRaw = document.getElementById('f-count').value;
   const priceRaw = document.getElementById('f-price').value;
   const data = {
@@ -1656,7 +1697,10 @@ async function saveStocking(){
     state.events.push({ id: uid(), tankId: state.activeTankId, ...data });
   }
   await saveState();
+  isSavingStocking = false;
+  ui.tab = 'overview';
   closeModal();
+  showToast(editing ? 'Änderungen gespeichert ✓' : 'Besatz gespeichert ✓');
 }
 
 async function deleteEvent(id){
