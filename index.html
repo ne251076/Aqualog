@@ -482,6 +482,23 @@ const FISH_DB = [
   { name:'Schmetterlingsbuntbarsch', aliases:['apistogramma cacatuoides'], minLiters:60, minGroup:1, ph:[5.5,7.0], temp:[24,28], maxSize:8, temperament:'halb-aggressiv', notes:'Am besten paarweise halten, Männchen sind territorial.' },
   { name:'Diskus', aliases:['symphysodon'], minLiters:300, minLengthCm:100, minGroup:6, ph:[5.5,7.0], temp:[28,30], maxSize:20, temperament:'friedlich', notes:'Anspruchsvoll, braucht sehr stabile Wasserwerte und warmes Wasser.' },
   { name:'Zwerggarnele', aliases:['neocaridina', 'red fire', 'garnele'], minLiters:20, minGroup:10, ph:[6.5,8.0], temp:[20,26], maxSize:3, temperament:'friedlich', notes:'Kein Kupfer im Wasser! Größere Fische können eine Gefahr sein.' },
+  { name:'Platy', aliases:['xiphophorus maculatus'], minLiters:54, minGroup:3, ph:[7.0,8.2], temp:[22,26], maxSize:6, temperament:'friedlich', notes:'Lebendgebärend, anspruchslos, gute Anfängerart.' },
+  { name:'Schwertträger', aliases:['xiphophorus hellerii'], minLiters:100, minGroup:3, ph:[7.0,8.2], temp:[22,26], maxSize:12, temperament:'friedlich', notes:'Männchen können sich untereinander jagen; besser 1 Männchen auf mehrere Weibchen.' },
+  { name:'Phantomsalmler', aliases:['schwarzer phantomsalmler','hyphessobrycon megalopterus'], minLiters:60, minGroup:6, ph:[6.0,7.5], temp:[23,27], maxSize:4.5, temperament:'friedlich', notes:'Ruhiger Schwarmfisch, leichte Rangordnung unter den Männchen.' },
+  { name:'Roter Phantomsalmler', aliases:['hyphessobrycon sweglesi'], minLiters:60, minGroup:6, ph:[6.0,7.5], temp:[23,27], maxSize:4.5, temperament:'friedlich', notes:'Ähnlich dem Schwarzen Phantomsalmler, etwas farbenfroher.' },
+  { name:'Betta', aliases:['kampffisch','siamesischer kampffisch','betta splendens'], minLiters:20, minGroup:1, ph:[6.0,7.5], temp:[24,28], maxSize:6, temperament:'halb-aggressiv', notes:'Männchen niemals mit anderen Männchen oder langflossigen Fischen zusammen halten.' },
+  { name:'Goldfisch', aliases:['carassius auratus'], minLiters:100, minGroup:2, ph:[6.5,8.0], temp:[18,22], maxSize:20, temperament:'friedlich', notes:'Kaltwasserfisch – nicht mit tropischen Fischen vergesellschaften. Wird groß, braucht auf Dauer sehr viel Platz.' },
+  { name:'Regenbogenfisch', aliases:['boesemani','melanotaenia'], minLiters:200, minGroup:6, ph:[7.0,8.0], temp:[24,28], maxSize:10, temperament:'friedlich', notes:'Lebhafter Schwarmfisch, braucht Schwimmraum in der Länge.' },
+  { name:'Zwergsaugwels', aliases:['otocinclus'], minLiters:54, minGroup:6, ph:[6.5,7.5], temp:[22,26], maxSize:5, temperament:'friedlich', notes:'Ausgezeichneter Algenfresser, sollte nicht einzeln gehalten werden.' },
+  { name:'Blauer Gurami', aliases:['dreipunkt-gurami','trichogaster trichopterus'], minLiters:150, minGroup:1, ph:[6.5,7.5], temp:[24,28], maxSize:15, temperament:'halb-aggressiv', notes:'Kann gegenüber Artgenossen und kleineren Fischen territorial werden.' },
+  { name:'Perlhuhnbärbling', aliases:['celestial pearl danio','danio margaritatus'], minLiters:54, minGroup:8, ph:[6.5,7.5], temp:[20,24], maxSize:2.5, temperament:'friedlich', notes:'Sehr kleiner, friedlicher Schwarmfisch, gut für Nano-Becken.' },
+  { name:'Endler-Guppy', aliases:['endler'], minLiters:54, minGroup:5, ph:[7.0,8.2], temp:[22,28], maxSize:3.5, temperament:'friedlich', notes:'Kleiner als der klassische Guppy, ebenfalls lebendgebärend.' },
+  { name:'Blutsalmler', aliases:['moenkhausia sanctaefilomenae','rotaugen-moenkhausia'], minLiters:100, minGroup:8, ph:[6.0,7.5], temp:[22,26], maxSize:6.5, temperament:'friedlich', notes:'Robuster Schwarmfisch für größere Gruppen.' },
+  { name:'Beilbauchfisch', aliases:['carnegiella strigata','marmorierter beilbauchfisch'], minLiters:60, minGroup:6, ph:[5.5,7.0], temp:[24,28], maxSize:4.5, temperament:'friedlich', notes:'Lebt an der Wasseroberfläche, springt gerne – Becken gut abdecken.' },
+  { name:'Prachtschmerle', aliases:['clown loach','chromobotia macracanthus'], minLiters:300, minGroup:5, ph:[6.0,7.5], temp:[25,30], maxSize:30, temperament:'friedlich', notes:'Wird sehr groß und alt (teils über 20 Jahre) – auf Dauer ein sehr großes Becken nötig.' },
+  { name:'Feuerschwanz', aliases:['red tail shark','epalzeorhynchos bicolor'], minLiters:200, minGroup:1, ph:[6.5,7.5], temp:[22,26], maxSize:12, temperament:'halb-aggressiv', notes:'Territorial gegenüber Artgenossen und ähnlich aussehenden Fischen, meist nur einzeln halten.' },
+  { name:'Kirschbarbe', aliases:['puntius titteya'], minLiters:60, minGroup:6, ph:[6.0,7.5], temp:[22,26], maxSize:5, temperament:'friedlich', notes:'Ruhiger, friedlicher Barben-Verwandter.' },
+  { name:'Amanogarnele', aliases:['caridina multidentata'], minLiters:54, minGroup:5, ph:[6.5,7.5], temp:[20,26], maxSize:5, temperament:'friedlich', notes:'Ausgezeichneter Algenfresser, auch gegen Bartalgen wirksam.' },
 ];
 
 let state = { tanks: [], entries: [], events: [], activeTankId: null };
@@ -1593,8 +1610,15 @@ async function deleteEntry(id){
 
 function matchFish(speciesText){
   if(!speciesText) return null;
-  const t = speciesText.toLowerCase();
-  return FISH_DB.find(f => t.includes(f.name.toLowerCase()) || (f.aliases||[]).some(a => t.includes(a.toLowerCase())));
+  const t = speciesText.toLowerCase().trim();
+  return FISH_DB.find(f => {
+    const name = f.name.toLowerCase();
+    if(t.includes(name) || name.includes(t)) return true;
+    return (f.aliases||[]).some(a => {
+      const al = a.toLowerCase();
+      return t.includes(al) || al.includes(t);
+    });
+  });
 }
 
 function getStockedGroups(){
