@@ -328,7 +328,12 @@
   .btn-primary{ background: var(--accent); color:#06181A; }
   .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger); margin-top:8px; }
   .btn-ghost{ background:transparent; color:var(--text-muted); border:1px solid var(--border); margin-top:8px; }
-  .choose-btn{ text-align:left; display:flex; align-items:center; gap:10px; font-size:15px; }
+  .choose-btn{
+    -webkit-appearance:none; appearance:none;
+    text-align:left !important;
+    display:flex !important; justify-content:flex-start !important;
+    align-items:center; gap:10px; font-size:15px;
+  }
   .close-x{ position:absolute; top:16px; right:16px; color:var(--text-muted); background:none; border:none; font-size:20px; cursor:pointer; }
   .sheet{ position:relative; }
   .tank-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
