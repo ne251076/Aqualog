@@ -328,6 +328,7 @@
   .btn-primary{ background: var(--accent); color:#06181A; }
   .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger); margin-top:8px; }
   .btn-ghost{ background:transparent; color:var(--text-muted); border:1px solid var(--border); margin-top:8px; }
+  .choose-btn{ text-align:left; display:flex; align-items:center; gap:10px; font-size:15px; }
   .close-x{ position:absolute; top:16px; right:16px; color:var(--text-muted); background:none; border:none; font-size:20px; cursor:pointer; }
   .sheet{ position:relative; }
   .tank-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
@@ -1232,13 +1233,13 @@ function renderModal(){
       <div class="sheet">
         <button class="close-x" onclick="closeModal()">✕</button>
         <div class="sheet-title">Was möchtest du eintragen?</div>
-        <button class="btn btn-ghost" onclick="openEntryModal()">💧 Wasserwerte</button>
-        <button class="btn btn-ghost" onclick="openMaintenanceModal()">🛠 Wartung</button>
-        <button class="btn btn-ghost" onclick="openStockingModal()">🐟 Besatz</button>
-        <button class="btn btn-ghost" onclick="openAssistantModal()">🔍 Besatz-Assistent</button>
-        <button class="btn btn-ghost" onclick="closeModal(); generateReport();">📄 PDF-Bericht</button>
-        <button class="btn btn-ghost" onclick="refreshData()">🔄 Aktualisieren</button>
-        <button class="btn btn-ghost" onclick="openTankModal()">⚙ Einstellungen</button>
+        <button class="btn btn-ghost choose-btn" onclick="openEntryModal()">💧 Wasserwerte</button>
+        <button class="btn btn-ghost choose-btn" onclick="openMaintenanceModal()">🛠 Wartung</button>
+        <button class="btn btn-ghost choose-btn" onclick="openStockingModal()">🐟 Besatz</button>
+        <button class="btn btn-ghost choose-btn" onclick="openAssistantModal()">🔍 Besatz-Assistent</button>
+        <button class="btn btn-ghost choose-btn" onclick="closeModal(); generateReport();">📄 PDF-Bericht</button>
+        <button class="btn btn-ghost choose-btn" onclick="refreshData()">🔄 Aktualisieren</button>
+        <button class="btn btn-ghost choose-btn" onclick="openTankModal()">⚙ Einstellungen</button>
       </div>
     `;
   } else if(ui.modal === 'entry'){
